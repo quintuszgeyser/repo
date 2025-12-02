@@ -1,97 +1,86 @@
-==================================================
 quintuszgeyser/repo
-Welcome to my personal repository!
-This space contains Python projects focused on financial calculations, automation, and practical scripting.
-The main project currently featured is the Investment & Bond Calculator—a command-line tool for calculating investment growth and home loan repayments.
+Overview
+This repository showcases Python projects focused on practical business and data science applications. The two main projects are:
+
+Task Manager Capstone Project: A command-line tool for managing tasks and users.
+POS System: A simple point-of-sale application for retail transactions.
+
 
 Table of Contents
 
-Projects
+Task Manager Capstone Project
+POS System
 Installation
 Usage
 Technologies Used
-Screenshots
-Contributing
-License
 Contact
 
 
-Projects
-Investment & Bond Calculator
-A Python program that allows users to:
+Task Manager Capstone Project
+Location:
+Level 1 - Python for Data Science/M03T10 – Capstone Project – Task Manager/task_template.py
+Description:
+A Python command-line application for managing tasks and users.
+Features include:
 
-Calculate the future value of an investment (simple or compound interest)
-Calculate the monthly repayment on a home loan (bond)
+User authentication and registration (admin only)
+Adding new tasks with details (title, description, due date, assigned user)
+Viewing all tasks or only those assigned to the current user
+Editing tasks (mark as complete, update details)
+Generating reports on task completion and user activity
 
-Ideal for anyone learning basic financial mathematics or practicing Python input handling, branching, and numeric calculations.
-Features:
+How to Use:
 
-Menu-driven command-line interface
-Handles both investment and bond calculations
-Input validation and error handling
-No external dependencies (uses Python’s built-in math module)
+Navigate to the project folder:
+cd "Level 1 - Python for Data Science/M03T10 – Capstone Project – Task Manager"
+
+
+Run the script:
+python task_template.py
+
+
+Log in and follow the menu prompts to manage users and tasks.
+
+Data Files:
+
+tasks.txt: Stores all task details.
+user.txt: Stores user credentials.
+
+
+POS System
+Location:
+pos_system.py
+Description:
+A Python-based Point-of-Sale (POS) system for small businesses.
+Features include:
+
+Processing sales transactions
+Managing inventory
+Generating sales reports
+
+How to Use:
+
+Ensure you have Python 3.x installed.
+Run the script:
+python pos_system.py
+
+
+Follow the prompts to process sales, manage inventory, and view reports.
 
 
 Installation
-
-
-Ensure you have Python 3.x installed.
-Check with:
-python --version
-
-
 
 Clone the repository:
 git clone https://github.com/quintuszgeyser/repo.git
 
 
+Navigate to the desired project folder.
+Run the relevant Python script as described above.
 
-Move into the project directory:
-cd repo
-
-
-
-Run the script:
-python finance_calculator.py
-
-
-
-
-Usage
-After running the script, you’ll see a menu:
-
-Investment – Calculate the interest earned on an investment
-Bond – Calculate the monthly repayment on a home loan
-
-Investment Option:
-You’ll be prompted for:
-
-Amount to invest
-Interest rate
-Number of years
-Type of interest: simple or compound
-
-Bond Option:
-You’ll be prompted for:
-
-Present value of the house
-Interest rate
-Number of months to repay
-
-The program will calculate and display the results.
 
 Technologies Used
 
 Python 3.x
-
-
-Screenshots
-Bond Calculation Example:
-Please enter the present value of the house: 1000000
-Enter the interest rate: 7
-Number of months to repay: 240
-Your monthly repayment will be R7753.64
-
 
 
 
@@ -100,4 +89,3 @@ Created and maintained by:
 Quintusz Geyser
 GitHub: https://github.com/quintuszgeyser
 Email: quintusz.geyser@gmail.com
-==================================================
