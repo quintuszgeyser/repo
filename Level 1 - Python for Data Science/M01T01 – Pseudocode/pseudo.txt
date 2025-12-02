@@ -1,0 +1,41 @@
+1)
+	Prompt user to enter number stored into a variable number
+	in a while loop check if the number is equal to 0 
+		if the number is not 0 place the number into a array named usernumbers
+		if the number is 0 end the loop and return the maximum of the array 
+		
+
+2)
+Prompt the user to input their named store it in a variable named first_name.
+Print first_name + Hello,World
+
+
+3) 
+Read arbatary number of integers into an aray		
+Get the sum of the integers store it in a variable named sum
+Get the count of the integers store it in a variable named count
+print sum divided by count
+
+4) 
+Create two arays
+	all_items that has all the items we need 
+	baught_items that has all items that have been baught_items
+Create an empty aray named remaining items 
+	for each item in all items check if it is in baught_items if it is not then add it to remaining items , do this until all items have been checked
+Sort remaining items alpabetically 
+Print the list of remaining items
+
+5)
+Create variable X
+Create variable Y
+
+set variable S as X plus Y 
+Set variable A as S divided by 2 
+set variable P as X multiplied by Y
+
+Print S 
+Print A
+Print P
+
+
+

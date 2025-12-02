@@ -1,0 +1,30 @@
+Total users: 4
+Total tasks: 4
+
+User: admin
+  Total tasks: 2
+  % of total tasks: 50.00%
+  % completed: 0.00%
+  % incomplete: 100.00%
+  % overdue: 100.00%
+
+User: Q
+  Total tasks: 2
+  % of total tasks: 50.00%
+  % completed: 0.00%
+  % incomplete: 100.00%
+  % overdue: 100.00%
+
+User: Quintusz
+  Total tasks: 0
+  % of total tasks: 0.00%
+  % completed: 0.00%
+  % incomplete: 0.00%
+  % overdue: 0.00%
+
+User: admin
+  Total tasks: 2
+  % of total tasks: 50.00%
+  % completed: 0.00%
+  % incomplete: 100.00%
+  % overdue: 100.00%

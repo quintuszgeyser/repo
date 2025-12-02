@@ -1,0 +1,5 @@
+100+2 = 102
+44 = 44
+22 = 22
+22+4 = 26
+exit = Use exit() or Ctrl-Z plus Return to exit
