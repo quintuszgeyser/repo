@@ -1,0 +1,132 @@
+FRAUDENGINE – DOCKER COMPOSE CHEAT SHEET
+
+--START APP
+docker compose up -d
+docker-compose up -d --build
+docker-compose --env-file docker/.env up -d --build
+
+--STOP APP (SAFE, KEEP DATA)
+docker compose stop
+
+--STOP AND REMOVE CONTAINERS
+docker compose down
+
+--FULL RESET (DELETE DATABASE DATA)
+docker compose down -v
+
+--RESTART EVERYTHING
+docker compose restart
+
+--RESTART ONLY APP
+docker compose restart fraudengine
+
+--VIEW ALL LOGS
+docker compose logs -f
+
+--VIEW APP LOGS
+docker compose logs -f fraudengine
+
+--VIEW POSTGRES LOGS
+docker compose logs -f postgres
+
+--BUILD JAR
+./mvnw clean package
+
+--REBUILD IMAGE + START
+docker compose up -d --build
+
+--CHECK RUNNING CONTAINERS
+docker ps
+
+--TEST APP
+curl http://localhost:8080
+curl http://localhost:8080/api/ping
+
+--ENTER POSTGRES
+docker exec -it fraudengine-postgres psql -U frauduser frauddb
+EXIT POSTGRES
+\q
+
+
+-- Turn on expanded mode for wide rows (one column per line)
+\x
+
+-- Or auto switch expanded mode only when row is wide
+\x auto
+
+-- Show aligned table with borders
+\pset border 2
+\pset format aligned
+
+-- Disable headers/footers for raw output (optional)
+-- \a    -- unaligned
+-- \t    -- tuples only
+
+
+
+
+
+
+
+--COMMON FIX (MOST ISSUES)
+docker compose down
+docker compose up -d --build
+
+--NUCLEAR FIX (LAST RESORT)
+docker compose down -v
+docker compose up -d --build
+
+--APP URL
+http://localhost:8080
+
+--DATABASE
+postgres container name = fraudengine-postgres
+db name = frauddb
+user = frauduser
+password = Fraud
+
+
+
+
+
+
+commands:
+
+Get all fraud flagged rules
+
+http://localhost:8080/api/fraud-flags
+
+
+
+
+--git commands:
+
+
+
+
+# Configure Git to use Windows SSL backend (Schannel)
+git config --global http.sslBackend schannel
+
+
+
+
+# 1) See your current branch and status
+git status
+git branch
+
+# 2) Fetch the latest from GitHub
+git fetch origin main
+
+# 3) Rebase your local commits on top of the remote main
+git pull --rebase origin main
+
+# 4) Resolve any merge conflicts if they appear
+#    - Open conflicted files, fix manually
+#    - Then:
+git add <file-you-fixed>
+git rebase --continue
+
+# 5) Push your now-rebased local branch
+git push -u origin main
+
+

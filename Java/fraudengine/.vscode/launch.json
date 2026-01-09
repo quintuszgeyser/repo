@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-FraudengineApplication<fraudengine>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "capitec.fraudengine.FraudengineApplication",
+            "projectName": "fraudengine",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}

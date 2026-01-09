@@ -1,0 +1,453 @@
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> wsl -d rancher-desktop --exec sh -lc "nohup /usr/local/bin/buildkitd --containerd-worker=true --oci-worker=false --addr unix:///run/buildkit-k8s.io/buildkitd.sock >/tmp/buildkitd.log 2>&1 &"
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> wsl -d rancher-desktop --exec sh -lc "ls -l /run/buildkit-k8s.io/buildkitd.sock || (echo 'no socket yet'; tail -n +1 /tmp/buildkitd.log)"
+ls: /run/buildkit-k8s.io/buildkitd.sock: No such file or directory
+no socket yet
+tail: can't open '/tmp/buildkitd.log': No such file or directory
+tail: no files
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> docker build -t fraudengine:0.0.1 .
+[+] Building 2.8s (2/2) FINISHED                                                                         docker:default
+ => [internal] load build definition from Dockerfile                                                               0.1s
+ => => transferring dockerfile: 417B                                                                               0.0s
+ => ERROR [internal] load metadata for docker.io/library/eclipse-temurin21-jre:latest                              2.8s
+------
+ > [internal] load metadata for docker.io/library/eclipse-temurin21-jre:latest:
+------
+Dockerfile:2
+--------------------
+   1 |
+   2 | >>> FROM eclipse-temurin21-jre
+   3 |
+   4 |     WORKDIR app
+--------------------
+ERROR: failed to build: failed to solve: eclipse-temurin21-jre: failed to resolve source metadata for docker.io/library/eclipse-temurin21-jre:latest: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> docker build -t fraudengine:0.0.1 .
+[+] Building 21.1s (8/8) FINISHED                                                                        docker:default
+ => [internal] load build definition from Dockerfile                                                               0.0s
+ => => transferring dockerfile: 566B                                                                               0.0s
+ => [internal] load metadata for docker.io/library/eclipse-temurin:21-jre                                          4.3s
+ => [internal] load .dockerignore                                                                                  0.0s
+ => => transferring context: 2B                                                                                    0.0s
+ => [1/3] FROM docker.io/library/eclipse-temurin:21-jre@sha256:b0f6befb3f2af49704998c4425cb6313c1da505648a8e78ce  12.5s
+ => => resolve docker.io/library/eclipse-temurin:21-jre@sha256:b0f6befb3f2af49704998c4425cb6313c1da505648a8e78cee  0.0s
+ => => sha256:4a0e444f3c26062a0908ef59f39a3b8894225b2faef3d5b877c11441d3a52713 2.28kB / 2.28kB                     0.9s
+ => => sha256:1321ce5b3e3ab111f1a88d34df69fbf748e96e3338e9f3d403b062e3e26d99d9 158B / 158B                         1.2s
+ => => sha256:0b92fa77023f1881e077b68fb149d30aade157324fdc1181dacf19b57e1313b9 52.98MB / 52.98MB                  10.6s
+ => => sha256:f878172f1ac3121519dd1795c821097cda557a10d8ac4526d248f9fe1738b942 16.97MB / 16.97MB                   6.5s
+ => => sha256:20043066d3d5c78b45520c5707319835ac7d1f3d7f0dded0138ea0897d6a3188 29.72MB / 29.72MB                   9.4s
+ => => extracting sha256:20043066d3d5c78b45520c5707319835ac7d1f3d7f0dded0138ea0897d6a3188                          0.7s
+ => => extracting sha256:f878172f1ac3121519dd1795c821097cda557a10d8ac4526d248f9fe1738b942                          0.4s
+ => => extracting sha256:0b92fa77023f1881e077b68fb149d30aade157324fdc1181dacf19b57e1313b9                          0.9s
+ => => extracting sha256:1321ce5b3e3ab111f1a88d34df69fbf748e96e3338e9f3d403b062e3e26d99d9                          0.0s
+ => => extracting sha256:4a0e444f3c26062a0908ef59f39a3b8894225b2faef3d5b877c11441d3a52713                          0.0s
+ => [internal] load build context                                                                                  0.7s
+ => => transferring context: 79.18MB                                                                               0.7s
+ => [2/3] WORKDIR /app                                                                                             1.1s
+ => [3/3] COPY target/fraudengine-0.0.1-SNAPSHOT.jar app.jar                                                       0.1s
+ => exporting to image                                                                                             2.6s
+ => => exporting layers                                                                                            2.0s
+ => => exporting manifest sha256:cec0e07bf5e3772ff8da4552ba4e97771b76732aa2b99bd34205aa79e05663b3                  0.0s
+ => => exporting config sha256:0737e796ecc0093e73c37ad3497b14323d35fa6894f437addcc43c8a2856d604                    0.0s
+ => => exporting attestation manifest sha256:8009a66cffd9e5dfaca799f6e638df0463a628f797615d6af2c0508d66aa4f18      0.0s
+ => => exporting manifest list sha256:aedade8930e26827e4629600270d71d2946d916a45ab9178ba68b2555646242d             0.0s
+ => => naming to docker.io/library/fraudengine:0.0.1                                                               0.0s
+ => => unpacking to docker.io/library/fraudengine:0.0.1                                                            0.5s
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> docker run -p 8080:8080 --name fraudengine fraudengine:0.0.1
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.4.12)
+
+2026-01-07T07:56:35.336Z  INFO 7 --- [fraudengine] [           main] c.fraudengine.FraudengineApplication     : Starting FraudengineApplication v0.0.1-SNAPSHOT using Java 21.0.9 with PID 7 (/app/app.jar started by root in /app)
+2026-01-07T07:56:35.339Z  INFO 7 --- [fraudengine] [           main] c.fraudengine.FraudengineApplication     : The following 1 profile is active: "prod"
+2026-01-07T07:56:36.548Z  INFO 7 --- [fraudengine] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-07T07:56:36.616Z  INFO 7 --- [fraudengine] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 55 ms. Found 1 JPA repository interface.
+2026-01-07T07:56:37.177Z  INFO 7 --- [fraudengine] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-01-07T07:56:37.195Z  INFO 7 --- [fraudengine] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-01-07T07:56:37.195Z  INFO 7 --- [fraudengine] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.49]
+2026-01-07T07:56:37.232Z  INFO 7 --- [fraudengine] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-01-07T07:56:37.234Z  INFO 7 --- [fraudengine] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1847 ms
+2026-01-07T07:56:37.580Z  INFO 7 --- [fraudengine] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-01-07T07:56:37.648Z  INFO 7 --- [fraudengine] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.36.Final
+2026-01-07T07:56:37.695Z  INFO 7 --- [fraudengine] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-01-07T07:56:37.930Z  INFO 7 --- [fraudengine] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-07T07:56:37.963Z  INFO 7 --- [fraudengine] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-07T07:56:39.020Z  WARN 7 --- [fraudengine] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 08001
+2026-01-07T07:56:39.020Z ERROR 7 --- [fraudengine] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+2026-01-07T07:56:39.022Z  WARN 7 --- [fraudengine] [           main] o.h.e.j.e.i.JdbcEnvironmentInitiator     : HHH000342: Could not obtain connection to query metadata
+
+org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+        at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:100) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:94) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcIsolationDelegate.delegateWork(JdbcIsolationDelegate.java:116) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.getJdbcEnvironmentUsingJdbcMetadata(JdbcEnvironmentInitiator.java:334) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.initiateService(JdbcEnvironmentInitiator.java:129) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator.initiateService(JdbcEnvironmentInitiator.java:81) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.registry.internal.StandardServiceRegistryImpl.initiateService(StandardServiceRegistryImpl.java:130) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.service.internal.AbstractServiceRegistryImpl.createService(AbstractServiceRegistryImpl.java:263) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.service.internal.AbstractServiceRegistryImpl.initializeService(AbstractServiceRegistryImpl.java:238) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.service.internal.AbstractServiceRegistryImpl.getService(AbstractServiceRegistryImpl.java:215) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.model.relational.Database.<init>(Database.java:45) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.internal.InFlightMetadataCollectorImpl.getDatabase(InFlightMetadataCollectorImpl.java:226) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.internal.InFlightMetadataCollectorImpl.<init>(InFlightMetadataCollectorImpl.java:194) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.model.process.spi.MetadataBuildingProcess.complete(MetadataBuildingProcess.java:171) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.metadata(EntityManagerFactoryBuilderImpl.java:1442) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1513) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:973) ~[spring-context-6.2.14.jar!/:6.2.14]
+        at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.14.jar!/:6.2.14]
+        at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.4.12.jar!/:3.4.12]        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at capitec.fraudengine.FraudengineApplication.main(FraudengineApplication.java:10) ~[!/:0.0.1-SNAPSHOT]
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
+        at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+        at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:102) ~[app.jar:0.0.1-SNAPSHOT]
+        at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:64) ~[app.jar:0.0.1-SNAPSHOT]
+        at org.springframework.boot.loader.launch.JarLauncher.main(JarLauncher.java:40) ~[app.jar:0.0.1-SNAPSHOT]
+Caused by: org.postgresql.util.PSQLException: Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+        at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:373) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:279) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.Driver.makeConnection(Driver.java:448) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.Driver.connect(Driver.java:298) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:137) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:360) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:202) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:461) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:550) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:98) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:111) ~[HikariCP-5.1.0.jar!/:na]
+        at org.hibernate.engine.jdbc.connections.internal.DatasourceConnectionProviderImpl.getConnection(DatasourceConnectionProviderImpl.java:126) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess.obtainConnection(JdbcEnvironmentInitiator.java:485) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcIsolationDelegate.delegateWork(JdbcIsolationDelegate.java:61) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        ... 40 common frames omitted
+Caused by: java.net.ConnectException: Connection refused
+        at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+        at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source) ~[na:na]
+        at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source) ~[na:na]
+        at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source) ~[na:na]
+        at java.base/java.net.SocksSocketImpl.connect(Unknown Source) ~[na:na]
+        at java.base/java.net.Socket.connect(Unknown Source) ~[na:na]
+        at org.postgresql.core.PGStream.createSocket(PGStream.java:261) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.PGStream.<init>(PGStream.java:122) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289) ~[postgresql-42.7.8.jar!/:42.7.8]
+        ... 54 common frames omitted
+
+2026-01-07T07:56:39.043Z  WARN 7 --- [fraudengine] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-01-07T07:56:39.050Z  INFO 7 --- [fraudengine] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+        Database JDBC URL [Connecting through datasource 'HikariDataSource (null)']
+        Database driver: undefined/unknown
+        Database version: 12.0
+        Autocommit mode: undefined/unknown
+        Isolation level: undefined/unknown
+        Minimum pool size: undefined/unknown
+        Maximum pool size: undefined/unknown
+2026-01-07T07:56:38.497Z  INFO 7 --- [fraudengine] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-01-07T07:56:38.533Z  INFO 7 --- [fraudengine] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-07T07:56:39.553Z  WARN 7 --- [fraudengine] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 08001
+2026-01-07T07:56:39.553Z ERROR 7 --- [fraudengine] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+2026-01-07T07:56:39.560Z ERROR 7 --- [fraudengine] [           main] j.LocalContainerEntityManagerFactoryBean : Failed to initialize JPA EntityManagerFactory: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.exception.JDBCConnectionException: Unable to open JDBC Connection for DDL execution [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+2026-01-07T07:56:39.561Z  WARN 7 --- [fraudengine] [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'entityManagerFactory' defined in class path resource [org/springframework/boot/autoconfigure/orm/jpa/HibernateJpaConfiguration.class]: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.exception.JDBCConnectionException: Unable to open JDBC Connection for DDL execution [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+2026-01-07T07:56:39.568Z  INFO 7 --- [fraudengine] [           main] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2026-01-07T07:56:39.587Z  INFO 7 --- [fraudengine] [           main] .s.b.a.l.ConditionEvaluationReportLogger :
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-01-07T07:56:39.625Z ERROR 7 --- [fraudengine] [           main] o.s.boot.SpringApplication               : Application run failed
+
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'entityManagerFactory' defined in class path resource [org/springframework/boot/autoconfigure/orm/jpa/HibernateJpaConfiguration.class]: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.exception.JDBCConnectionException: Unable to open JDBC Connection for DDL execution [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1826) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:973) ~[spring-context-6.2.14.jar!/:6.2.14]
+        at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.14.jar!/:6.2.14]
+        at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.4.12.jar!/:3.4.12]        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.4.12.jar!/:3.4.12]
+        at capitec.fraudengine.FraudengineApplication.main(FraudengineApplication.java:10) ~[!/:0.0.1-SNAPSHOT]
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
+        at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+        at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:102) ~[app.jar:0.0.1-SNAPSHOT]
+        at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:64) ~[app.jar:0.0.1-SNAPSHOT]
+        at org.springframework.boot.loader.launch.JarLauncher.main(JarLauncher.java:40) ~[app.jar:0.0.1-SNAPSHOT]
+Caused by: jakarta.persistence.PersistenceException: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.exception.JDBCConnectionException: Unable to open JDBC Connection for DDL execution [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+        at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:431) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.14.jar!/:6.2.14]
+        ... 20 common frames omitted
+Caused by: org.hibernate.exception.JDBCConnectionException: Unable to open JDBC Connection for DDL execution [Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.] [n/a]
+        at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:100) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:94) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.resource.transaction.backend.jdbc.internal.DdlTransactionIsolatorNonJtaImpl.getIsolatedConnection(DdlTransactionIsolatorNonJtaImpl.java:74) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.resource.transaction.backend.jdbc.internal.DdlTransactionIsolatorNonJtaImpl.getIsolatedConnection(DdlTransactionIsolatorNonJtaImpl.java:39) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.internal.exec.ImprovedExtractionContextImpl.getJdbcConnection(ImprovedExtractionContextImpl.java:63) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.extract.spi.ExtractionContext.getQueryResults(ExtractionContext.java:43) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.extract.internal.SequenceInformationExtractorLegacyImpl.extractMetadata(SequenceInformationExtractorLegacyImpl.java:39) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.extract.internal.DatabaseInformationImpl.initializeSequences(DatabaseInformationImpl.java:66) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.extract.internal.DatabaseInformationImpl.<init>(DatabaseInformationImpl.java:60) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.internal.Helper.buildDatabaseInformation(Helper.java:185) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:93) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at java.base/java.util.HashMap.forEach(Unknown Source) ~[na:na]
+        at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.14.jar!/:6.2.14]
+        ... 24 common frames omitted
+Caused by: org.postgresql.util.PSQLException: Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+        at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:373) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:279) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.Driver.makeConnection(Driver.java:448) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.Driver.connect(Driver.java:298) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:137) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:360) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:202) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:461) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:550) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:98) ~[HikariCP-5.1.0.jar!/:na]
+        at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:111) ~[HikariCP-5.1.0.jar!/:na]
+        at org.hibernate.engine.jdbc.connections.internal.DatasourceConnectionProviderImpl.getConnection(DatasourceConnectionProviderImpl.java:126) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess.obtainConnection(JdbcEnvironmentInitiator.java:485) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        at org.hibernate.resource.transaction.backend.jdbc.internal.DdlTransactionIsolatorNonJtaImpl.getIsolatedConnection(DdlTransactionIsolatorNonJtaImpl.java:46) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+        ... 44 common frames omitted
+Caused by: java.net.ConnectException: Connection refused
+        at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+        at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source) ~[na:na]
+        at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source) ~[na:na]
+        at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source) ~[na:na]
+        at java.base/java.net.SocksSocketImpl.connect(Unknown Source) ~[na:na]
+        at java.base/java.net.Socket.connect(Unknown Source) ~[na:na]
+        at org.postgresql.core.PGStream.createSocket(PGStream.java:261) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.PGStream.<init>(PGStream.java:122) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146) ~[postgresql-42.7.8.jar!/:42.7.8]
+        at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289) ~[postgresql-42.7.8.jar!/:42.7.8]
+        ... 58 common frames omitted
+
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> docker compose up -d
+time="2026-01-07T10:00:22+02:00" level=warning msg="C:\\Users\\CP368103\\OneDrive - Capitec Bank Ltd\\Documents\\Pers\\Quintusz\\Projects\\Java\\fraudengine\\fraudengine\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Running 15/15
+ ✔ postgres Pulled                                                                                                30.9s
+   ✔ 19a4bd73b5b6 Pull complete                                                                                    1.3s
+   ✔ 7f53036964f1 Pull complete                                                                                   10.1s
+   ✔ ff1a91754d0b Pull complete                                                                                    1.3s
+   ✔ 2809b03b8187 Pull complete                                                                                    1.4s
+   ✔ 02d7611c4eae Pull complete                                                                                    9.9s
+   ✔ 3efabc308a47 Pull complete                                                                                    1.7s
+   ✔ 592e7afa2092 Pull complete                                                                                    1.3s
+   ✔ 08375b6eb817 Pull complete                                                                                    5.2s
+   ✔ 6b79f2b29884 Pull complete                                                                                   10.0s
+   ✔ c3ce0464f73e Pull complete                                                                                   10.3s
+   ✔ be56d59d6531 Pull complete                                                                                    1.4s
+   ✔ 5773fb4a9d72 Pull complete                                                                                    1.6s
+   ✔ 31172abd8f4a Pull complete                                                                                    1.2s
+   ✔ 74ee42a72ba8 Pull complete                                                                                   25.3s
+[+] Running 4/4
+ ✔ Network fraudengine_default       Created                                                                       0.0s
+ ✔ Volume fraudengine_postgres_data  Created                                                                       0.0s
+ ✔ Container fraudengine-postgres    Healthy                                                                      10.8s
+ ✔ Container fraudengine-app         Started                                                                      10.5s
+PS C:\Users\CP368103\OneDrive - Capitec Bank Ltd\Documents\Pers\Quintusz\Projects\Java\fraudengine\fraudengine> docker compose logs -f
+time="2026-01-07T10:01:13+02:00" level=warning msg="C:\\Users\\CP368103\\OneDrive - Capitec Bank Ltd\\Documents\\Pers\\Quintusz\\Projects\\Java\\fraudengine\\fraudengine\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+fraudengine-app  |
+fraudengine-app  |   .   ____          _            __ _ _
+fraudengine-app  |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+fraudengine-app  | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+fraudengine-app  |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+fraudengine-app  |   '  |____| .__|_| |_|_| |_\__, | / / / /
+fraudengine-app  |  =========|_|==============|___/=/_/_/_/
+fraudengine-app  |
+fraudengine-app  |  :: Spring Boot ::               (v3.4.12)
+fraudengine-app  |
+fraudengine-app  | 2026-01-07T08:01:04.969Z  INFO 7 --- [fraudengine] [           main] c.fraudengine.FraudengineApplication     : Starting FraudengineApplication v0.0.1-SNAPSHOT using Java 21.0.9 with PID 7 (/app/app.jar started by root in /app)
+fraudengine-app  | 2026-01-07T08:01:04.971Z  INFO 7 --- [fraudengine] [           main] c.fraudengine.FraudengineApplication     : The following 1 profile is active: "prod"
+fraudengine-app  | 2026-01-07T08:01:06.466Z  INFO 7 --- [fraudengine] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+fraudengine-app  | 2026-01-07T08:01:06.544Z  INFO 7 --- [fraudengine] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 63 ms. Found 1 JPA repository interface.
+fraudengine-app  | 2026-01-07T08:01:07.523Z  INFO 7 --- [fraudengine] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+fraudengine-app  | 2026-01-07T08:01:07.544Z  INFO 7 --- [fraudengine] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+fraudengine-app  | 2026-01-07T08:01:07.544Z  INFO 7 --- [fraudengine] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.49]
+fraudengine-app  | 2026-01-07T08:01:07.591Z  INFO 7 --- [fraudengine] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+fraudengine-app  | 2026-01-07T08:01:07.594Z  INFO 7 --- [fraudengine] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2581 ms
+fraudengine-app  | 2026-01-07T08:01:08.246Z  INFO 7 --- [fraudengine] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+fraudengine-app  | 2026-01-07T08:01:08.331Z  INFO 7 --- [fraudengine] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.36.Final
+fraudengine-app  | 2026-01-07T08:01:08.384Z  INFO 7 --- [fraudengine] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+fraudengine-app  | 2026-01-07T08:01:08.866Z  INFO 7 --- [fraudengine] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+fraudengine-app  | 2026-01-07T08:01:08.911Z  INFO 7 --- [fraudengine] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+fraudengine-app  | 2026-01-07T08:01:09.347Z  INFO 7 --- [fraudengine] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@25dcf1b6
+fraudengine-app  | 2026-01-07T08:01:09.350Z  INFO 7 --- [fraudengine] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+fraudengine-app  | 2026-01-07T08:01:09.396Z  WARN 7 --- [fraudengine] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+fraudengine-app  | 2026-01-07T08:01:09.426Z  INFO 7 --- [fraudengine] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+fraudengine-app  |      Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+fraudengine-app  |      Database driver: undefined/unknown
+fraudengine-app  |      Database version: 16.11
+fraudengine-app  |      Autocommit mode: undefined/unknown
+fraudengine-app  |      Isolation level: undefined/unknown
+fraudengine-app  |      Minimum pool size: undefined/unknown
+fraudengine-app  |      Maximum pool size: undefined/unknown
+fraudengine-app  | 2026-01-07T08:01:10.892Z  INFO 7 --- [fraudengine] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+fraudengine-app  | Hibernate: create table transactions (id bigint generated by default as identity, amount numeric(19,2) not null, category varchar(64), currency varchar(3) not null, de101_file_name varchar(255), de102_account_id_1 varchar(255), de103_account_id_2 varchar(255), de110_additional_data_iso varchar(255), de118_invoice_number varchar(255), de119_transaction_description varchar(255), de123_pos_data_code varchar(255), de127_additional_data_private varchar(255), de12_local_transaction_time varchar(6), de13_local_transaction_date varchar(4), de14_expiration_date varchar(4), de15_settlement_date varchar(4), de18_merchant_type varchar(4), de22_pos_entry_mode varchar(3), de23_card_sequence_number varchar(3), de25_pos_condition_code varchar(2), de26_pos_pin_capture_code varchar(2), de27_auth_id_response_length varchar(1), de28_transaction_fee_amount varchar(9), de30_transaction_processing_fee_amount varchar(9), de32_acquiring_inst_id_code varchar(255), de33_forwarding_inst_id_code varchar(255), de35_track_2_data varchar(255), de3_processing_code varchar(6), de40_service_restriction_code varchar(3), de44_additional_response_data varchar(255), de45_track_1_data varchar(255), de48_additional_data_private varchar(255), de52_pin_data varchar(8), de53_security_control_info varchar(48), de54_additional_amounts varchar(255), de56_original_data_elements varchar(255), de58_authorizing_agent_inst_id_code varchar(255), de59_reserved_private varchar(255), de5_amount_reconciliation varchar(12), de66_settlement_code varchar(1), de70_network_mgmt_info_code varchar(3), de74_credits_number varchar(10), de75_credits_reversal_number varchar(10), de76_debits_number varchar(10), de77_debits_reversal_number varchar(10), de78_transfer_number varchar(10), de79_transfer_reversal_number varchar(10), de7_transmission_datetime varchar(10), de80_inquiries_number varchar(10), de81_authorizations_number varchar(10), de82_credits_processing_fee_amount varchar(12), de83_credits_transaction_fee_amount varchar(12), de84_debits_processing_fee_amount varchar(12), de85_debits_transaction_fee_amount varchar(12), de86_credits_amount varchar(16), de87_credits_reversal_amount varchar(16), de88_debits_amount varchar(16), de89_debits_reversal_amount varchar(16), de90_original_data_elements varchar(42), de91_file_update_code varchar(1), de95_replacement_amounts varchar(42), de9_conversion_rate_settlement varchar(8), flagged boolean not null, location varchar(128), merchant_id varchar(15), mti varchar(4), pan varchar(32) not null, response_code varchar(2), rrn varchar(12), stan varchar(6), terminal_id varchar(8), timestamp timestamp(6) with time zone not null, primary key (id))
+fraudengine-app  | Hibernate: create index idx_tx_account_ts on transactions (account_id, timestamp)
+fraudengine-app  | 2026-01-07T08:01:10.962Z  WARN 7 --- [fraudengine] [           main] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "create index idx_tx_account_ts on transactions (account_id, timestamp)" via JDBC [ERROR: column "account_id" does not exist]
+fraudengine-app  |
+fraudengine-app  | org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "create index idx_tx_account_ts on transactions (account_id, timestamp)" via JDBC [ERROR: column "account_id" does not exist]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applyIndexes(AbstractSchemaMigrator.java:361) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:96) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at java.base/java.util.HashMap.forEach(Unknown Source) ~[na:na]
+fraudengine-app  |      at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:973) ~[spring-context-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.14.jar!/:6.2.14]
+fraudengine-app  |      at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.4.12.jar!/:3.4.12]
+fraudengine-app  |      at capitec.fraudengine.FraudengineApplication.main(FraudengineApplication.java:10) ~[!/:0.0.1-SNAPSHOT]
+fraudengine-app  |      at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
+fraudengine-app  |      at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+fraudengine-app  |      at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:102) ~[app.jar:0.0.1-SNAPSHOT]
+fraudengine-app  |      at org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:64) ~[app.jar:0.0.1-SNAPSHOT]
+fraudengine-app  |      at org.springframework.boot.loader.launch.JarLauncher.main(JarLauncher.java:40) ~[app.jar:0.0.1-SNAPSHOT]
+fraudengine-app  | Caused by: org.postgresql.util.PSQLException: ERROR: column "account_id" does not exist
+fraudengine-app  |      at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar!/:42.7.8]
+fraudengine-app  |      at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:94) ~[HikariCP-5.1.0.jar!/:na]
+fraudengine-app  |      at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-5.1.0.jar!/:na]
+fraudengine-app  |      at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.36.Final.jar!/:6.6.36.Final]
+fraudengine-app  |      ... 42 common frames omitted
+fraudengine-app  |
+fraudengine-app  | Hibernate: create index idx_tx_flagged on transactions (flagged)
+fraudengine-app  | Hibernate: create index idx_tx_rrn on transactions (rrn)
+fraudengine-app  | 2026-01-07T08:01:10.990Z  INFO 7 --- [fraudengine] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+fraudengine-app  | ISO Server listening on port 8037 (BINARY framing via PostChannel)
+fraudengine-app  | 2026-01-07T08:01:11.674Z  WARN 7 --- [fraudengine] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+fraudengine-app  | 2026-01-07T08:01:12.822Z  INFO 7 --- [fraudengine] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 14 endpoints beneath base path '/actuator'
+fraudengine-app  | 2026-01-07T08:01:13.005Z  INFO 7 --- [fraudengine] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+fraudengine-app  | 2026-01-07T08:01:13.033Z  INFO 7 --- [fraudengine] [           main] c.fraudengine.FraudengineApplication     : Started FraudengineApplication in 8.57 seconds (process running for 9.044)
+fraudengine-postgres  | The files belonging to this database system will be owned by user "postgres".
+fraudengine-postgres  | This user must also own the server process.
+fraudengine-postgres  |
+fraudengine-postgres  | The database cluster will be initialized with locale "en_US.utf8".
+fraudengine-postgres  | The default database encoding has accordingly been set to "UTF8".
+fraudengine-postgres  | The default text search configuration will be set to "english".
+fraudengine-postgres  |
+fraudengine-postgres  | Data page checksums are disabled.
+fraudengine-postgres  |
+fraudengine-postgres  | fixing permissions on existing directory /var/lib/postgresql/data ... ok
+fraudengine-postgres  | creating subdirectories ... ok
+fraudengine-postgres  | selecting dynamic shared memory implementation ... posix
+fraudengine-postgres  | selecting default max_connections ... 100
+fraudengine-postgres  | selecting default shared_buffers ... 128MB
+fraudengine-postgres  | selecting default time zone ... Etc/UTC
+fraudengine-postgres  | creating configuration files ... ok
+fraudengine-postgres  | running bootstrap script ... ok
+fraudengine-postgres  | performing post-bootstrap initialization ... ok
+fraudengine-postgres  | syncing data to disk ... ok
+fraudengine-postgres  |
+fraudengine-postgres  |
+fraudengine-postgres  | Success. You can now start the database server using:
+fraudengine-postgres  |
+fraudengine-postgres  |     pg_ctl -D /var/lib/postgresql/data -l logfile start
+fraudengine-postgres  |
+fraudengine-postgres  | initdb: warning: enabling "trust" authentication for local connections
+fraudengine-postgres  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+fraudengine-postgres  | waiting for server to start....2026-01-07 08:00:54.219 UTC [48] LOG:  starting PostgreSQL 16.11 (Debian 16.11-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+fraudengine-postgres  | 2026-01-07 08:00:54.221 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+fraudengine-postgres  | 2026-01-07 08:00:54.228 UTC [51] LOG:  database system was shut down at 2026-01-07 08:00:53 UTC
+fraudengine-postgres  | 2026-01-07 08:00:54.235 UTC [48] LOG:  database system is ready to accept connections
+fraudengine-postgres  |  done
+fraudengine-postgres  | server started
+fraudengine-postgres  | CREATE DATABASE
+fraudengine-postgres  |
+fraudengine-postgres  |
+fraudengine-postgres  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+fraudengine-postgres  |
+fraudengine-postgres  | waiting for server to shut down....2026-01-07 08:00:54.396 UTC [48] LOG:  received fast shutdown request
+fraudengine-postgres  | 2026-01-07 08:00:54.399 UTC [48] LOG:  aborting any active transactions
+fraudengine-postgres  | 2026-01-07 08:00:54.401 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+fraudengine-postgres  | 2026-01-07 08:00:54.402 UTC [49] LOG:  shutting down
+fraudengine-postgres  | 2026-01-07 08:00:54.405 UTC [49] LOG:  checkpoint starting: shutdown immediate
+fraudengine-postgres  | 2026-01-07 08:00:54.701 UTC [49] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.035 s, sync=0.249 s, total=0.299 s; sync files=301, longest=0.010 s, average=0.001 s; distance=4273 kB, estimate=4273 kB; lsn=0/191F0D8, redo lsn=0/191F0D8
+fraudengine-postgres  | 2026-01-07 08:00:54.712 UTC [48] LOG:  database system is shut down
+fraudengine-postgres  |  done
+fraudengine-postgres  | server stopped
+fraudengine-postgres  |
+fraudengine-postgres  | PostgreSQL init process complete; ready for start up.
+fraudengine-postgres  |
+fraudengine-postgres  | 2026-01-07 08:00:54.845 UTC [1] LOG:  starting PostgreSQL 16.11 (Debian 16.11-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+fraudengine-postgres  | 2026-01-07 08:00:54.846 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+fraudengine-postgres  | 2026-01-07 08:00:54.846 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+fraudengine-postgres  | 2026-01-07 08:00:54.856 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+fraudengine-postgres  | 2026-01-07 08:00:54.869 UTC [64] LOG:  database system was shut down at 2026-01-07 08:00:54 UTC
+fraudengine-postgres  | 2026-01-07 08:00:54.880 UTC [1] LOG:  database system is ready to accept connections
+fraudengine-postgres  | 2026-01-07 08:01:10.959 UTC [76] ERROR:  column "account_id" does not exist
+fraudengine-postgres  | 2026-01-07 08:01:10.959 UTC [76] STATEMENT:  create index idx_tx_account_ts on transactions (account_id, timestamp)
