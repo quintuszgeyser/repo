@@ -19,8 +19,8 @@ from typing import Optional
 import psycopg
 import psycopg.rows
 
-from bc4000_client import send_chunk, ProtocolError, MSG_NO_PRICE_CHANGE
-from plu_formatter import should_sync, format_price_change
+from bc4000_client import send_chunk, ProtocolError
+from plu_formatter import should_sync, format_price_change, MSG_NO_PRICE_CHANGE
 
 # ---------------------------------------------------------------------------
 # Config
@@ -221,7 +221,7 @@ def fetch_products(conn, since: Optional[str]):
                    is_archived, is_for_sale, product_type, updated_at
             FROM products
             WHERE (
-                %(since)s IS NULL
+                %(since)s::timestamptz IS NULL
                 OR updated_at > %(since)s::timestamptz - INTERVAL '5 seconds'
             )
             AND is_archived = FALSE
