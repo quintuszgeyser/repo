@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from bc4000_client import num2bcd, bcd2num, num2nl, num2ns, nl2num, ns2num
-from plu_formatter import price_cents, format_price_change, should_sync
+from plu_formatter import price_cents, format_price_change, format_full_plu, should_sync
 
 
 class TestBcdEncoding(unittest.TestCase):
@@ -140,6 +140,95 @@ class TestFormatPriceChange(unittest.TestCase):
              'product_type': 'simple'}
         result = format_price_change(p)
         self.assertIsInstance(result, bytes)
+
+
+class TestFullPluFormat(unittest.TestCase):
+    """Tests for MsgNo 1001 full PLU formatter."""
+
+    def _weight(self, **overrides):
+        p = {'id': 3, 'name': 'Biltong', 'price': None,
+             'price_per_unit': Decimal('0.45'), 'sold_by_weight': True,
+             'is_archived': False, 'is_for_sale': True, 'product_type': 'stock_item'}
+        p.update(overrides)
+        return p
+
+    def _fixed(self, **overrides):
+        p = {'id': 10, 'name': 'Bread Roll', 'price': Decimal('12.50'),
+             'price_per_unit': None, 'sold_by_weight': False,
+             'is_archived': False, 'is_for_sale': True, 'product_type': 'simple'}
+        p.update(overrides)
+        return p
+
+    def _parse(self, product):
+        """Return CSV fields as list (strips trailing empty field from trailing comma)."""
+        raw = format_full_plu(product).decode('utf-8')
+        # Split carefully — quoted fields may contain commas (they don't here, but be safe)
+        # Simple split is fine since we control the format
+        fields = raw.rstrip(',').split(',')
+        return fields
+
+    def test_returns_bytes(self):
+        self.assertIsInstance(format_full_plu(self._weight()), bytes)
+
+    def test_field_count_weight(self):
+        fields = self._parse(self._weight())
+        # 85 value positions matching SerializeScaleDataAc4000 South Africa call count
+        raw = format_full_plu(self._weight()).decode('utf-8')
+        self.assertEqual(raw.count(','), 85,
+                         f"Expected 85 commas in full PLU CSV, got {raw.count(',')}")
+
+    def test_field_count_fixed(self):
+        raw = format_full_plu(self._fixed()).decode('utf-8')
+        self.assertEqual(raw.count(','), 85)
+
+    def test_plu_id_first_field(self):
+        fields = self._parse(self._weight())
+        self.assertEqual(fields[0], '3')
+
+    def test_description_weight_item(self):
+        raw = format_full_plu(self._weight()).decode('utf-8')
+        self.assertIn('\x0d\x0aBILTONG\x0d\x01PER KG', raw)
+
+    def test_description_fixed_item(self):
+        raw = format_full_plu(self._fixed()).decode('utf-8')
+        self.assertIn('\x0d\x0aBREAD ROLL\x0d\x01EACH', raw)
+
+    def test_name_uppercase(self):
+        raw = format_full_plu(self._fixed(name='bread roll')).decode('utf-8')
+        self.assertIn('BREAD ROLL', raw)
+        self.assertNotIn('bread roll', raw)
+
+    def test_name_truncated_at_20_chars(self):
+        long_name = 'A' * 25
+        raw = format_full_plu(self._fixed(name=long_name)).decode('utf-8')
+        # Only 20 A's should appear in the description
+        self.assertIn('A' * 20, raw)
+        self.assertNotIn('A' * 21, raw)
+
+    def test_sales_mode_weight(self):
+        # sales_mode field is at a fixed position — find it after the description
+        # It comes right after the closing quote of the description
+        raw = format_full_plu(self._weight()).decode('utf-8')
+        # Find the description end and check next field
+        desc_end = raw.index('",')  # closing quote of description
+        after_desc = raw[desc_end + 2:].split(',')
+        self.assertEqual(after_desc[0], '0')   # sales_mode = 0 (weight)
+
+    def test_sales_mode_fixed(self):
+        raw = format_full_plu(self._fixed()).decode('utf-8')
+        desc_end = raw.index('",')
+        after_desc = raw[desc_end + 2:].split(',')
+        self.assertEqual(after_desc[0], '1')   # sales_mode = 1 (fixed)
+
+    def test_price_written_twice(self):
+        # R450/kg → 45000 cents; should appear twice consecutively after sales_mode
+        raw = format_full_plu(self._weight()).decode('utf-8')
+        self.assertIn('45000,45000,', raw)
+
+    def test_fixed_price_written_twice(self):
+        # R12.50 → 1250 cents
+        raw = format_full_plu(self._fixed()).decode('utf-8')
+        self.assertIn('1250,1250,', raw)
 
 
 if __name__ == '__main__':

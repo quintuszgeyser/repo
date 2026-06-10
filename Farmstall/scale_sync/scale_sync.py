@@ -20,7 +20,7 @@ import psycopg
 import psycopg.rows
 
 from bc4000_client import send_chunk, ProtocolError
-from plu_formatter import should_sync, format_price_change, MSG_NO_PRICE_CHANGE
+from plu_formatter import should_sync, format_full_plu, MSG_NO_FULL_PLU
 
 # ---------------------------------------------------------------------------
 # Config
@@ -296,9 +296,9 @@ def run_sync_cycle(conn):
         if is_dead_letter(p, failed):
             logger.debug(f"Skipping dead-letter product {p['id']}")
             continue
-        data = format_price_change(p)
+        data = format_full_plu(p)
         if data is None:
-            mark_failed(p['id'], "format_price_change returned None", failed)
+            mark_failed(p['id'], "format_full_plu returned None", failed)
             continue
         to_sync.append((p, data))
 
@@ -343,7 +343,7 @@ def run_sync_cycle(conn):
                     host=SCALE_IP,
                     port=SCALE_PORT,
                     timeout=SCALE_TIMEOUT,
-                    msg_no=MSG_NO_PRICE_CHANGE,
+                    msg_no=MSG_NO_FULL_PLU,
                     records=data_blobs,
                 )
                 break
