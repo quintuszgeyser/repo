@@ -299,28 +299,35 @@ def run_sync_cycle(conn):
             conn.commit()
             logger.info(f"Sent {len(chunk)} PLUs: updated={result['updated']} errors={result['errors']} {result['duration_ms']:.0f}ms")
 
-    # --- Delete orphan PLUs ---
+    # --- Remove orphan PLUs by overwriting with a zeroed/disabled record ---
+    # MsgNo 2023 (delete) is unreliable — scale returns status 20 for some PLUs.
+    # Instead we overwrite with a zero-price "REMOVED" record using MsgNo 1001.
     orphans_removed = 0
     if orphan_codes:
-        logger.info(f"Deleting {len(orphan_codes)} orphan PLUs from scale: {sorted(orphan_codes)}")
-        delete_records = [format_delete_plu(code) for code in sorted(orphan_codes)]
+        logger.info(f"Removing {len(orphan_codes)} orphan PLUs from scale: {sorted(orphan_codes)}")
+        # Build zeroed PLU records for each orphan
+        zero_records = []
+        for code in sorted(orphan_codes):
+            desc = '\x0d\x0aREMOVED\x0d\x01'
+            csv = f'{code},0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"{desc}",1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,'
+            zero_records.append(csv.encode('utf-8'))
+
         if DRY_RUN:
             for code in sorted(orphan_codes):
-                logger.info(f"DRY_RUN: delete PLU {code}")
+                logger.info(f"DRY_RUN: zero-out PLU {code}")
             orphans_removed = len(orphan_codes)
         else:
-            result, exc = _send_with_retry(MSG_NO_DELETE_PLU, delete_records, label='delete orphans')
+            result, exc = _send_with_retry(MSG_NO_FULL_PLU, zero_records, label='zero orphans')
             if result is not None:
                 orphans_removed = len(orphan_codes)
-                # Mark those products as no longer synced
                 conn.execute("""
                     UPDATE products SET scale_last_sync_status = 'removed'
                     WHERE product_code = ANY(%(codes)s)
                 """, {'codes': list(orphan_codes)})
                 conn.commit()
-                logger.info(f"Deleted {orphans_removed} orphan PLUs")
+                logger.info(f"Zeroed {orphans_removed} orphan PLUs on scale")
             else:
-                logger.error(f"Orphan delete failed: {exc}")
+                logger.error(f"Orphan zero-out failed: {exc}")
 
     complete_sync_run(conn, run_id, 'ok' if total_failed == 0 else 'partial',
                       sent=total_sent, failed=total_failed,
