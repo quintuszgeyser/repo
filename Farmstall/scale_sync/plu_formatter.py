@@ -128,17 +128,18 @@ def format_full_plu(product: dict) -> bytes:
     desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
     price_s    = str(price)
 
-    # Barcode: product_code encoded in scale variable-weight label
-    barcode      = str(plu_no)
-    barcode_type = '21'   # BarCodeNum=21 (EAN enabled, from SLP-V db)
-    pos_flag     = '20'   # Posflag=20 (POS barcode enabled, from SLP-V db)
-
-    # Scale-specific overrides from product
-    tare         = str(int(float(product.get('scale_tare') or 0) * 1000))  # g → mg for protocol
+    # Confirmed field mappings (empirical — field_mapper.py + SLP-V DB readback):
+    # CSV[9]  = ShelfLife (days)
+    # CSV[28] = ExMessage1, CSV[29] = ExMessage2, CSV[30] = ExMessage3
+    # CSV[61] = Tare (integer grams, no conversion)
+    # CSV[67] = BarCodeNum, CSV[69] = Posflag
+    barcode      = str(plu_no)   # ItemCode = PLU = product_code
+    barcode_type = '21'          # BarCodeNum=21 (EAN enabled)
+    pos_flag     = '20'          # Posflag=20
+    tare         = str(int(float(product.get('scale_tare') or 0)))
     shelf_life   = str(product.get('scale_shelf_life') or 0)
-    # BestBeforeFlag: set to 1 (Reference) when shelf_life is set, so scale prints best-before date
-    best_before_flag = '1' if (product.get('scale_shelf_life') or 0) > 0 else '0'
-    open_price = '1' if product.get('scale_open_price') else '0'
+    open_price   = '1' if product.get('scale_open_price') else '0'
+    # Messages: append to label description as extra lines
     # Messages stored as text — append to description if set
     msg1_text  = (product.get('scale_msg1') or '').strip()[:20]
     msg2_text  = (product.get('scale_msg2') or '').strip()[:20]
@@ -147,71 +148,25 @@ def format_full_plu(product: dict) -> bytes:
     if msg2_text:
         desc += f'\x0d\x01{msg2_text}'
 
-    fields = [
-        str(plu_no),       # F0   PLU number = product_code (NOT database id)
-        str(plu_no),       # F67  item code = same as PLU (encoded in barcode)
-        best_before_flag,  # DateFlag / BestBeforeFlag (1=Reference, enables shelf life)
-        '0',               # F5   time flag
-        '0',           # skip
-        '0',           # F46  pack time offset
-        '0',           # skip
-        '0',           # F8   expiry time flag
-        '0',           # skip
-        '0',           # num3 date flag part 3
-        shelf_life,    # F45  shelf life days
-        '0',           # num2 date flag part 2
-        '0',           # num4 date flag part 4
-        '0', '0', '0', '0',
-        '0',           # F59  label format 1
-        '0',           # F60  label format 2
-        '0', '0', '0', '0',
-        '0',           # F71  dept code
-        '0',           # F72  group code
-        '0', '0', '0',
-        '0',           # ExMsg1 (text appended to description instead)
-        '0',           # ExMsg2
-        '0',           # ExMsg3
-        '0',           # Coupon
-        '0', '0',
-        '0',           # skip
-        '0',           # F65  cost price
-        '0',           # F117 tax rate
-        '0', '0', '0', '0', '0',
-        '0',           # skip F10
-        '0', '0',
-        open_price,    # F7   open price flag
-        '0',           # nutrition
-        '0',           # F55
-        '0',           # F9
-        f'"{desc}"',   # F94  description
-        str(sales_mode),  # F2  sales mode
-        price_s,       # F62  price
-        price_s,       # F62  price (duplicate)
-        '0',           # F3   markdown flag
-        '0',           # F66  markdown price
-        '0',           # skip
-        '0',           # F42  pack quantity (removed)
-        '0',           # F17  unit type
-        '0',           # F64  fixed weight
-        '0',           # F69  upper weight limit
-        '0',           # F70  lower weight limit
-        tare,          # F43  tare weight
-        '0', '0', '0', '0',
-        '0',           # F6   POS select
-        barcode_type,  # F16  barcode number type
-        '0',           # skip
-        pos_flag,      # F47  POS flag
-        f'"{barcode}"',# F92  barcode string
-        '0',           # F91  origin country
-        '0',           # skip
-        '0',           # F89  free message 5
-        '0',           # skip
-        '0',           # F53  logo 1
-        '0',           # F54  logo 2
-        '0',           # skip
-        '0',           # F61
-        '0', '0', '0', '0', '0', '0',
-    ]
+    # Build 85-field array with confirmed positions.
+    # Positions not yet mapped remain 0.
+    f = ['0'] * 85
+    f[0]  = str(plu_no)       # confirmed: PLU number
+    f[1]  = str(plu_no)       # confirmed: ItemCode
+    f[9]  = shelf_life        # confirmed: ShelfLife (days)
+    f[28] = '0'               # confirmed: ExMessage1 (text in description instead)
+    f[29] = '0'               # confirmed: ExMessage2
+    f[30] = '0'               # confirmed: ExMessage3
+    f[43] = open_price        # suspected: OpenPrice flag (unconfirmed)
+    f[49] = f'"{desc}"'       # confirmed: Description
+    f[50] = str(sales_mode)   # confirmed: SalesMode (0=weight, 1=fixed)
+    f[51] = price_s           # confirmed: Price
+    f[52] = price_s           # confirmed: Price duplicate
+    f[61] = tare              # confirmed: Tare (integer grams)
+    f[67] = barcode_type      # confirmed: BarCodeNum (21=EAN)
+    f[69] = pos_flag          # confirmed: Posflag (20=enabled)
+    f[70] = f'"{barcode}"'    # suspected: PosCode (unconfirmed — barcode not verified)
+    fields = f
 
     return (','.join(fields) + ',').encode('utf-8')
 
