@@ -125,11 +125,12 @@ def fetch_scale_products(conn) -> List[dict]:
     return rows
 
 def fetch_synced_codes(conn) -> set:
-    """Get all product_codes currently marked as synced in POS."""
+    """Get ALL product_codes ever successfully synced to scale (regardless of current sync_to_scale).
+    This catches orphans from: archived products, sync disabled, type changed, deleted products.
+    """
     rows = conn.execute("""
         SELECT product_code FROM products
-        WHERE sync_to_scale = TRUE
-          AND scale_last_sync_status = 'ok'
+        WHERE scale_last_sync_status = 'ok'
           AND product_code IS NOT NULL
     """).fetchall()
     return {r['product_code'] for r in rows}
