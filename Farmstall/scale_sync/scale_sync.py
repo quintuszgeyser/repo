@@ -210,7 +210,7 @@ def fetch_products(conn, since: Optional[str]):
     with conn.transaction():
         changed = conn.execute("""
             SELECT id, name, price, price_per_unit, sold_by_weight,
-                   is_archived, is_for_sale, product_type, updated_at, barcode
+                   is_archived, is_for_sale, product_type, updated_at, barcode, product_code
             FROM products
             WHERE (
                 %(since)s::timestamptz IS NULL

@@ -112,13 +112,13 @@ def format_full_plu(product: dict) -> Optional[bytes]:
         # Ishida 2-line description: \x0d\xNN = newline + font code
         desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
         price_s    = str(price)
-        # The scale encodes ItemCode into the variable weight barcode.
-        # POS reads barcode prefix 20-29, extracts 5-digit ItemCode, looks up product.
-        # We use the product ID as ItemCode so the POS can find it.
-        item_code    = str(plu_id)   # ItemCode = product ID (encoded in barcode)
-        barcode      = str(plu_id)   # PosCode = same value
-        barcode_type = '21'          # BarCodeNum=21 (EAN barcode enabled)
-        pos_flag     = '20'          # Posflag=20 (POS barcode enabled)
+        # product_code is encoded in the variable weight barcode by the scale.
+        # POS reads prefix 20-29, extracts 5-digit product_code, looks up product.
+        product_code = product.get('product_code') or plu_id
+        item_code    = str(product_code)
+        barcode      = str(product_code)   # PosCode = product_code
+        barcode_type = '21'                # BarCodeNum=21 (EAN barcode enabled)
+        pos_flag     = '20'                # Posflag=20 (POS barcode enabled)
 
         fields = [
             str(plu_id),   # F0   PLU number
