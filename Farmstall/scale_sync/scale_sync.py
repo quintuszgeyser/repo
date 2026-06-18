@@ -33,7 +33,8 @@ from plu_formatter import (
 # Config
 # ---------------------------------------------------------------------------
 
-SCALE_IP      = os.environ['SCALE_IP']
+APP_ENV   = os.environ.get('APP_ENV', 'prod').lower()
+SCALE_IP  = os.environ['SCALE_IP']
 SCALE_PORT    = int(os.environ.get('SCALE_PORT', '7061'))
 SCALE_TIMEOUT = int(os.environ.get('SCALE_TIMEOUT_SEC', '10'))
 
@@ -48,7 +49,17 @@ CHUNK_SIZE      = int(os.environ.get('CHUNK_SIZE', '50'))
 DRY_RUN         = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 FORCE_FULL_SYNC = os.environ.get('FORCE_FULL_SYNC', 'false').lower() == 'true'
 
-DATA_DIR       = Path('/data')
+# Hard QA safety: QA must never send to real scale regardless of config
+if APP_ENV == 'qa':
+    if not DRY_RUN:
+        import sys
+        print(f"[QA][SAFETY] DRY_RUN=false in QA — forcing DRY_RUN=true", file=sys.stderr)
+        DRY_RUN = True
+
+LOG_PREFIX = f"[{APP_ENV.upper()}][{POSTGRES_DB}][{SCALE_IP}]"
+
+# DATA_DIR scoped per environment — separate state files for QA and PROD
+DATA_DIR       = Path('/data') / APP_ENV
 SUMMARY_FILE   = DATA_DIR / 'sync_summary.json'
 HEARTBEAT_FILE = DATA_DIR / 'last_success.timestamp'
 
@@ -223,16 +234,22 @@ def complete_sync_run(conn, run_id: int, status: str, sent=0, failed=0, orphans=
 # ---------------------------------------------------------------------------
 
 def scale_reachable() -> bool:
+    if APP_ENV == 'qa':
+        logger.debug(f"{LOG_PREFIX} Scale reachability check blocked in QA")
+        return False  # Layer 2 of 3: QA never polls real scale
     import socket
     try:
         s = socket.create_connection((SCALE_IP, SCALE_PORT), timeout=SCALE_TIMEOUT)
         s.close()
         return True
     except Exception as e:
-        logger.error(f"Scale unreachable at {SCALE_IP}:{SCALE_PORT} -- {e}")
+        logger.error(f"{LOG_PREFIX} Scale unreachable at {SCALE_IP}:{SCALE_PORT} -- {e}")
         return False
 
 def _send_with_retry(msg_no, records, label=''):
+    if APP_ENV == 'qa':
+        # Layer 2 hard block — QA cannot send to scale under any circumstances
+        raise RuntimeError(f"{LOG_PREFIX} [SAFETY] Blocked scale write in QA: {label}")
     for attempt in range(3):
         try:
             return send_chunk(
@@ -240,10 +257,11 @@ def _send_with_retry(msg_no, records, label=''):
                 msg_no=msg_no, records=records,
             ), None
         except (ProtocolError, Exception) as e:
-            logger.warning(f"{label} attempt {attempt+1}/3 failed: {e}")
+            last_exc = e
+            logger.warning(f"{LOG_PREFIX} {label} attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
                 time.sleep((2 ** attempt) + random.uniform(0, 0.5))
-    return None, Exception(f"{label} failed after 3 retries")
+    return None, Exception(f"{LOG_PREFIX} {label} failed after 3 retries")
 
 def chunked(lst, size):
     for i in range(0, len(lst), size):
@@ -405,10 +423,12 @@ def run_sync_cycle(conn):
 
 def main():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("Scale sync service starting")
-    logger.info(f"  Scale:    {SCALE_IP}:{SCALE_PORT}")
-    logger.info(f"  Database: {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
-    logger.info(f"  Interval: {SYNC_INTERVAL}s  DRY_RUN={DRY_RUN}  FORCE_FULL_SYNC={FORCE_FULL_SYNC}")
+    logger.info(f"{LOG_PREFIX} Scale sync service starting")
+    logger.info(f"{LOG_PREFIX}   Scale:    {SCALE_IP}:{SCALE_PORT}")
+    logger.info(f"{LOG_PREFIX}   Database: {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
+    logger.info(f"{LOG_PREFIX}   Interval: {SYNC_INTERVAL}s  DRY_RUN={DRY_RUN}  FORCE_FULL_SYNC={FORCE_FULL_SYNC}")
+    if APP_ENV == 'qa':
+        logger.warning(f"{LOG_PREFIX}   QA MODE: Scale writes BLOCKED (3 layers: DRY_RUN + code guard + SCALE_IP={SCALE_IP})")
 
     conn = db_connect_with_retry()
     wait_for_schema(conn)  # wait until POS migrations have run
