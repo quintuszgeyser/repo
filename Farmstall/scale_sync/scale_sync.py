@@ -35,7 +35,7 @@ POSTGRES_HOST = os.environ.get('POSTGRES_HOST', 'localhost')
 POSTGRES_PORT = int(os.environ.get('POSTGRES_PORT', '5432'))
 POSTGRES_DB = os.environ.get('POSTGRES_DB', 'farm_pos_prod')
 POSTGRES_USER = os.environ.get('POSTGRES_USER', 'farmstall')
-POSTGRES_PASSWORD = os.environ['POSTGRES_PASSWORD']
+POSTGRES_PASSWORD = os.environ.get('POSTGRES_PASSWORD', '')
 
 DRY_RUN = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 
