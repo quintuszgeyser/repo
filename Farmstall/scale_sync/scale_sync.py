@@ -110,7 +110,9 @@ def db_connect_with_retry(retries=10, delay=3):
             time.sleep(delay)
 
 def fetch_scale_products(conn) -> List[dict]:
-    """Fetch all products with sync_to_scale=TRUE (POS master copy)."""
+    """Fetch all products with sync_to_scale=TRUE (POS master copy).
+    Commits after read to release any implicit transaction lock.
+    """
     rows = conn.execute("""
         SELECT id, name, price, price_per_unit, sold_by_weight,
                is_archived, is_for_sale, product_type, updated_at,
@@ -122,6 +124,7 @@ def fetch_scale_products(conn) -> List[dict]:
         WHERE sync_to_scale = TRUE
         ORDER BY product_code
     """).fetchall()
+    conn.commit()  # release implicit transaction — prevent lock blocking POS migrations
     return rows
 
 def fetch_synced_codes(conn) -> set:
@@ -133,6 +136,7 @@ def fetch_synced_codes(conn) -> set:
         WHERE scale_last_sync_status = 'ok'
           AND product_code IS NOT NULL
     """).fetchall()
+    conn.commit()
     return {r['product_code'] for r in rows}
 
 def mark_product_synced(conn, product_id: int, scale_hash: str):
