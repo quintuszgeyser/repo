@@ -134,8 +134,10 @@ def format_full_plu(product: dict) -> bytes:
     pos_flag     = '20'   # Posflag=20 (POS barcode enabled, from SLP-V db)
 
     # Scale-specific overrides from product
-    tare       = str(int(float(product.get('scale_tare') or 0) * 1000))  # g → mg for protocol
-    shelf_life = str(product.get('scale_shelf_life') or 0)
+    tare         = str(int(float(product.get('scale_tare') or 0) * 1000))  # g → mg for protocol
+    shelf_life   = str(product.get('scale_shelf_life') or 0)
+    # BestBeforeFlag: set to 1 (Reference) when shelf_life is set, so scale prints best-before date
+    best_before_flag = '1' if (product.get('scale_shelf_life') or 0) > 0 else '0'
     open_price = '1' if product.get('scale_open_price') else '0'
     # Messages stored as text — append to description if set
     msg1_text  = (product.get('scale_msg1') or '').strip()[:20]
@@ -146,10 +148,10 @@ def format_full_plu(product: dict) -> bytes:
         desc += f'\x0d\x01{msg2_text}'
 
     fields = [
-        str(plu_no),   # F0   PLU number = product_code (NOT database id)
-        str(plu_no),   # F67  item code = same as PLU (encoded in barcode)
-        '0',           # DateFlag
-        '0',           # F5   time flag
+        str(plu_no),       # F0   PLU number = product_code (NOT database id)
+        str(plu_no),       # F67  item code = same as PLU (encoded in barcode)
+        best_before_flag,  # DateFlag / BestBeforeFlag (1=Reference, enables shelf life)
+        '0',               # F5   time flag
         '0',           # skip
         '0',           # F46  pack time offset
         '0',           # skip
