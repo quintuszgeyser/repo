@@ -96,12 +96,13 @@ def compute_scale_hash(product: dict) -> str:
     """Deterministic SHA-256 of scale-relevant product fields.
     If this hash matches scale_hash in the DB, the product is in sync.
     """
+    tare_raw = product.get('scale_tare')
     parts = [
         str(product.get('product_code', '')),
         (product.get('name') or '').strip().upper()[:MAX_NAME_LEN],
         str(price_cents(product)),
         str(1 if product.get('sold_by_weight') else 0),
-        str(product.get('scale_tare') or 0),
+        str(float(tare_raw) if tare_raw is not None else 0),  # normalise Decimal/float → str
         str(product.get('scale_shelf_life') or 0),
         str(1 if product.get('scale_open_price') else 0),
         str((product.get('scale_msg1') or '').strip()[:20]),
