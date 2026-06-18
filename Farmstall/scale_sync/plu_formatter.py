@@ -111,6 +111,8 @@ def format_full_plu(product: dict) -> Optional[bytes]:
         # Ishida 2-line description: \x0d\xNN = newline + font code
         desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
         price_s    = str(price)
+        barcode    = (product.get('barcode') or '').strip()
+        barcode_type = '1' if barcode else '0'  # 1 = EAN-13, 0 = none
 
         fields = [
             str(plu_id),   # F0   PLU number
@@ -163,10 +165,10 @@ def format_full_plu(product: dict) -> Optional[bytes]:
             '0',           # F43  tare weight
             '0', '0', '0', '0',              # skip×4
             '0',           # F6   POS select
-            '0',           # F16  barcode number type
+            barcode_type,  # F16  barcode number type (0=none, 1=EAN-13)
             '0',           # skip
             '0',           # F47  POS flag
-            '""',          # F92  barcode string (empty)
+            f'"{barcode}"',# F92  barcode string
             '0',           # F91  origin country
             '0',           # skip
             '0',           # F89  free message 5
