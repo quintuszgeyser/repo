@@ -112,6 +112,29 @@ def compute_scale_hash(product: dict) -> str:
     return hashlib.sha256('|'.join(parts).encode()).hexdigest()
 
 
+def format_prohibit_plu(plu_no: int) -> bytes:
+    """Format a PLU as prohibited — price 0, description REMOVED, prohibit flag.
+    Used for orphan removal (safer than zero-out or MsgNo 2023 delete).
+    """
+    desc = '\x0d\x0aREMOVED\x0d\x01'
+    f = [''] * 87
+    for idx in [2,3,5,7,10,11,12,17,18,23,24,28,29,30,31,35,42,46,47,48,
+                50,53,54,57,58,59,60,66,71,73,75,76,78,85,86]:
+        f[idx] = '0'
+    f[0]  = str(plu_no)
+    f[1]  = str(plu_no)
+    f[49] = f'"{desc}"'
+    f[50] = '1'          # SalesMode fixed (safest for prohibited)
+    f[51] = '0'
+    f[52] = '0'
+    f[56] = '1'
+    f[61] = '0'
+    f[67] = '0'          # BarCodeNum 0 = no barcode
+    f[69] = '0'          # Posflag 0 = disabled
+    f[70] = str(plu_no)
+    return (','.join(f) + ',').encode('utf-8')
+
+
 def format_full_plu(product: dict) -> bytes:
     """Format product as MsgNo 1001 CSV for BC-4000.
 
@@ -119,6 +142,12 @@ def format_full_plu(product: dict) -> bytes:
     to database id (that bug caused PLU 20 when product_code should have been 1).
     """
     validate_for_scale(product)
+
+    # SalesMode / price consistency guard
+    if product.get('sold_by_weight') and not product.get('price_per_unit'):
+        raise ScaleSyncValidationError(f"Product {product.get('id')}: weight item missing price_per_unit")
+    if not product.get('sold_by_weight') and not product.get('price'):
+        raise ScaleSyncValidationError(f"Product {product.get('id')}: fixed item missing price")
 
     plu_no     = product['product_code']   # NEVER use product['id'] here
     sales_mode = 0 if product.get('sold_by_weight') else 1
@@ -139,7 +168,9 @@ def format_full_plu(product: dict) -> bytes:
     tare         = str(int(float(product.get('scale_tare') or 0)))
     shelf_life   = str(product.get('scale_shelf_life') or 0)
     open_price   = '1' if product.get('scale_open_price') else '0'
+    # Description: sanitize name (strip control chars, enforce 20 char limit)
     # Messages: append to label description as extra lines
+    # Max 3 label lines: name + unit + (optional msg1) + (optional msg2)
     # Messages stored as text — append to description if set
     msg1_text  = (product.get('scale_msg1') or '').strip()[:20]
     msg2_text  = (product.get('scale_msg2') or '').strip()[:20]

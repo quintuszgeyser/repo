@@ -25,7 +25,7 @@ import psycopg.rows
 from bc4000_client import send_chunk, ProtocolError
 from plu_formatter import (
     should_sync, validate_for_scale, format_full_plu, format_delete_plu,
-    compute_scale_hash, ScaleSyncValidationError,
+    format_prohibit_plu, compute_scale_hash, ScaleSyncValidationError,
     MSG_NO_FULL_PLU, MSG_NO_DELETE_PLU,
 )
 
@@ -130,16 +130,31 @@ def fetch_scale_products(conn) -> List[dict]:
     return rows
 
 def fetch_synced_codes(conn) -> set:
-    """Get ALL product_codes ever successfully synced to scale (regardless of current sync_to_scale).
-    This catches orphans from: archived products, sync disabled, type changed, deleted products.
+    """Get ALL product_codes ever successfully synced to scale.
+    Catches orphans from: archived, sync disabled, type changed, deleted, PLU changed.
     """
     rows = conn.execute("""
         SELECT product_code FROM products
-        WHERE scale_last_sync_status = 'ok'
+        WHERE scale_last_sync_status IN ('ok', 'plu_changed')
           AND product_code IS NOT NULL
     """).fetchall()
     conn.commit()
     return {r['product_code'] for r in rows}
+
+
+def fetch_plu_changed(conn) -> list:
+    """Get products where PLU was changed — need to remove OLD PLU from scale first."""
+    rows = conn.execute("""
+        SELECT p.id, p.product_code as new_plu, l.old_plu
+        FROM products p
+        JOIN scale_plu_log l ON l.product_id = p.id
+        WHERE p.scale_last_sync_status = 'plu_changed'
+          AND l.sync_cleared = FALSE
+          AND l.old_plu IS NOT NULL
+        ORDER BY l.changed_at
+    """).fetchall()
+    conn.commit()
+    return rows
 
 def mark_product_synced(conn, product_id: int, scale_hash: str):
     conn.execute("""
@@ -253,6 +268,30 @@ def run_sync_cycle(conn):
 
         to_send.append((p, payload, new_hash))
 
+    # --- PLU changes: prohibit old PLU before sending new ---
+    plu_changes = fetch_plu_changed(conn)
+    if plu_changes:
+        logger.info(f"PLU changes pending: {[(r['old_plu'], r['new_plu']) for r in plu_changes]}")
+        old_plu_records = [format_prohibit_plu(r['old_plu']) for r in plu_changes]
+        if DRY_RUN:
+            for r in plu_changes:
+                logger.info(f"DRY_RUN: prohibit old PLU {r['old_plu']} (changed to {r['new_plu']})")
+        elif scale_reachable():
+            result, exc = _send_with_retry(MSG_NO_FULL_PLU, old_plu_records, label='prohibit old PLUs')
+            if result is not None:
+                conn.execute("""
+                    UPDATE scale_plu_log SET sync_cleared = TRUE
+                    WHERE sync_cleared = FALSE
+                      AND old_plu = ANY(%(old_plus)s)
+                """, {'old_plus': [r['old_plu'] for r in plu_changes]})
+                conn.execute("""
+                    UPDATE products SET scale_last_sync_status = NULL, scale_hash = NULL
+                    WHERE id = ANY(%(ids)s)
+                """, {'ids': [r['id'] for r in plu_changes]})
+                logger.info(f"Prohibited {len(plu_changes)} old PLUs, products queued for resync")
+            else:
+                logger.error(f"Failed to prohibit old PLUs: {exc}")
+
     # Detect orphans: PLUs previously synced that no longer have sync_to_scale=TRUE
     synced_codes = fetch_synced_codes(conn)
     active_codes = {p['product_code'] for p in products if p.get('product_code')}
@@ -260,7 +299,7 @@ def run_sync_cycle(conn):
 
     if to_skip:
         logger.info(f"In sync (skipped): {len(to_skip)} products")
-    if not to_send and not orphan_codes:
+    if not to_send and not orphan_codes and not plu_changes:
         logger.info("No changes to sync.")
         write_heartbeat()
         write_summary(0, 0, 0, 0)
@@ -310,13 +349,9 @@ def run_sync_cycle(conn):
     # Instead we overwrite with a zero-price "REMOVED" record using MsgNo 1001.
     orphans_removed = 0
     if orphan_codes:
-        logger.info(f"Removing {len(orphan_codes)} orphan PLUs from scale: {sorted(orphan_codes)}")
-        # Build zeroed PLU records for each orphan
-        zero_records = []
-        for code in sorted(orphan_codes):
-            desc = '\x0d\x0aREMOVED\x0d\x01'
-            csv = f'{code},0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"{desc}",1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,'
-            zero_records.append(csv.encode('utf-8'))
+        logger.info(f"Prohibiting {len(orphan_codes)} orphan PLUs on scale: {sorted(orphan_codes)}")
+        # Use prohibit format: REMOVED, price=0, barcode disabled — safer than zero-out
+        zero_records = [format_prohibit_plu(code) for code in sorted(orphan_codes)]
 
         if DRY_RUN:
             for code in sorted(orphan_codes):
