@@ -15,6 +15,7 @@ logger = logging.getLogger('plu_formatter')
 
 MSG_NO_PRICE_CHANGE = 1040
 MSG_NO_FULL_PLU = 1001
+MSG_NO_DELETE_PLU = 2023  # payload: "{plu_id}," — captured from SLP-V traffic
 
 MAX_PLU_ID = 99_999
 
@@ -187,6 +188,11 @@ def format_full_plu(product: dict) -> Optional[bytes]:
     except Exception as e:
         logger.error(f"Failed to format full PLU {product['id']}: {e}")
         return None
+
+
+def format_delete_plu(plu_id: int) -> bytes:
+    """Format a PLU delete record for MsgNo 2023. Payload: '{plu_id},'"""
+    return f"{plu_id},".encode('utf-8')
 
 
 def format_price_change(product: dict) -> Optional[bytes]:

@@ -1,11 +1,13 @@
 """
-BC-4000 Scale Sync Service — CLIENT MODE
+BC-4000 Scale Sync Service - CLIENT MODE
 
-Polls PostgreSQL every SYNC_INTERVAL_SEC seconds for changed products
-and pushes price updates to the BC-4000 scale via TCP port 7061.
+Polls PostgreSQL every SYNC_INTERVAL_SEC seconds for changed products,
+pushes updates to the BC-4000 scale via TCP port 7061, and deletes PLUs
+that are no longer syncable (archived, unweighted, etc).
 
-The scale listens on port 7061 when properly configured (B09-23 enabled).
 Protocol: Ishida Slp4000, reverse-engineered from SLP-V SlpDbServer.dll.
+  MsgNo 1001 = full PLU send
+  MsgNo 2023 = delete PLU (captured from SLP-V traffic)
 """
 import json
 import logging
@@ -21,14 +23,14 @@ import psycopg
 import psycopg.rows
 
 from bc4000_client import send_chunk, ProtocolError
-from plu_formatter import should_sync, format_full_plu, MSG_NO_FULL_PLU
+from plu_formatter import should_sync, format_full_plu, format_delete_plu, MSG_NO_FULL_PLU, MSG_NO_DELETE_PLU
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-SCALE_IP   = os.environ['SCALE_IP']
-SCALE_PORT = int(os.environ.get('SCALE_PORT', '7061'))
+SCALE_IP      = os.environ['SCALE_IP']
+SCALE_PORT    = int(os.environ.get('SCALE_PORT', '7061'))
 SCALE_TIMEOUT = int(os.environ.get('SCALE_TIMEOUT_SEC', '10'))
 
 POSTGRES_HOST     = os.environ.get('POSTGRES_HOST', 'localhost')
@@ -42,15 +44,16 @@ CHUNK_SIZE      = int(os.environ.get('CHUNK_SIZE', '50'))
 DRY_RUN         = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 FORCE_FULL_SYNC = os.environ.get('FORCE_FULL_SYNC', 'false').lower() == 'true'
 
-DATA_DIR          = Path('/data')
-STATE_FILE        = DATA_DIR / 'sync_state.json'
-FAILED_FILE       = DATA_DIR / 'failed_products.json'
-SUMMARY_FILE      = DATA_DIR / 'sync_summary.json'
-HEARTBEAT_FILE    = DATA_DIR / 'last_success.timestamp'
+DATA_DIR           = Path('/data')
+STATE_FILE         = DATA_DIR / 'sync_state.json'
+FAILED_FILE        = DATA_DIR / 'failed_products.json'
+SUMMARY_FILE       = DATA_DIR / 'sync_summary.json'
+HEARTBEAT_FILE     = DATA_DIR / 'last_success.timestamp'
 FIRST_SUCCESS_FILE = DATA_DIR / 'first_success.timestamp'
+SYNCED_IDS_FILE    = DATA_DIR / 'synced_plu_ids.json'
 
-DEAD_LETTER_SKIP_FAILURES   = 5
-DEAD_LETTER_SKIP_HOURS      = 1
+DEAD_LETTER_SKIP_FAILURES      = 5
+DEAD_LETTER_SKIP_HOURS         = 1
 DEAD_LETTER_PERMANENT_FAILURES = 24
 
 # ---------------------------------------------------------------------------
@@ -65,9 +68,9 @@ logging.basicConfig(
 logger = logging.getLogger('scale_sync')
 
 if DRY_RUN:
-    logger.warning('DRY_RUN=true — no data will be sent to scale')
+    logger.warning('DRY_RUN=true -- no data will be sent to scale')
 if FORCE_FULL_SYNC:
-    logger.warning('FORCE_FULL_SYNC=true — ignoring sync watermark')
+    logger.warning('FORCE_FULL_SYNC=true -- ignoring sync watermark')
 
 # ---------------------------------------------------------------------------
 # Atomic file writes
@@ -108,6 +111,19 @@ def save_failed(failed: dict):
     _atomic_write(FAILED_FILE, json.dumps(failed, default=str, indent=2))
 
 
+def load_synced_ids() -> set:
+    if SYNCED_IDS_FILE.exists():
+        try:
+            return set(json.loads(SYNCED_IDS_FILE.read_text(encoding='utf-8')))
+        except Exception as e:
+            logger.error(f"Could not read synced IDs file: {e}")
+    return set()
+
+
+def save_synced_ids(ids: set):
+    _atomic_write(SYNCED_IDS_FILE, json.dumps(sorted(ids)))
+
+
 def is_dead_letter(product: dict, failed: dict) -> bool:
     rec = failed.get(str(product['id']))
     if not rec:
@@ -127,7 +143,7 @@ def mark_failed(product_id: int, error: str, failed: dict):
     rec['last_error'] = str(error)
     n = rec['consecutive_failures']
     if n >= DEAD_LETTER_PERMANENT_FAILURES:
-        logger.error(f"Product {product_id} has failed {n} times — PERMANENT dead-letter.")
+        logger.error(f"Product {product_id} has failed {n} times -- PERMANENT dead-letter.")
         rec['permanent'] = True
     elif n >= DEAD_LETTER_SKIP_FAILURES:
         skip_until = (datetime.now(timezone.utc) + timedelta(hours=DEAD_LETTER_SKIP_HOURS)).isoformat()
@@ -190,8 +206,9 @@ def db_connect_with_retry(retries: int = 10, delay: int = 3):
 
 
 def fetch_products(conn, since: Optional[str]):
+    """Returns (changed_rows, all_syncable_ids, watermark)."""
     with conn.transaction():
-        rows = conn.execute("""
+        changed = conn.execute("""
             SELECT id, name, price, price_per_unit, sold_by_weight,
                    is_archived, is_for_sale, product_type, updated_at, barcode
             FROM products
@@ -202,17 +219,26 @@ def fetch_products(conn, since: Optional[str]):
             AND is_archived = FALSE
             AND is_for_sale = TRUE
             AND product_type != 'recipe'
-            AND (
-                (sold_by_weight = FALSE AND price IS NOT NULL AND price > 0)
-                OR (sold_by_weight = TRUE  AND price_per_unit IS NOT NULL AND price_per_unit > 0)
-            )
+            AND sold_by_weight = TRUE
+            AND price_per_unit IS NOT NULL AND price_per_unit > 0
             ORDER BY id
         """, {'since': since}).fetchall()
-    if not rows:
-        return [], None
-    watermark = max(r['updated_at'] for r in rows)
-    logger.info(f"Fetched {len(rows)} products (since={since}, watermark={watermark})")
-    return rows, watermark
+
+        all_ids = conn.execute("""
+            SELECT id FROM products
+            WHERE is_archived = FALSE
+              AND is_for_sale = TRUE
+              AND product_type != 'recipe'
+              AND sold_by_weight = TRUE
+              AND price_per_unit IS NOT NULL AND price_per_unit > 0
+              AND id <= 99999
+        """).fetchall()
+
+    all_syncable_ids = {r['id'] for r in all_ids}
+    watermark = max(r['updated_at'] for r in changed) if changed else None
+    if changed:
+        logger.info(f"Fetched {len(changed)} changed products (since={since})")
+    return changed, all_syncable_ids, watermark
 
 
 def chunked(lst, size):
@@ -227,8 +253,24 @@ def scale_reachable() -> bool:
         s.close()
         return True
     except Exception as e:
-        logger.error(f"Scale unreachable at {SCALE_IP}:{SCALE_PORT} — {e}")
+        logger.error(f"Scale unreachable at {SCALE_IP}:{SCALE_PORT} -- {e}")
         return False
+
+
+def _send_with_retry(msg_no, records, label=''):
+    last_exc = None
+    for attempt in range(3):
+        try:
+            return send_chunk(
+                host=SCALE_IP, port=SCALE_PORT, timeout=SCALE_TIMEOUT,
+                msg_no=msg_no, records=records,
+            ), None
+        except (ProtocolError, Exception) as e:
+            last_exc = e
+            logger.warning(f"{label} attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                time.sleep((2 ** attempt) + random.uniform(0, 0.5))
+    return None, last_exc
 
 # ---------------------------------------------------------------------------
 # Main sync cycle
@@ -237,18 +279,35 @@ def scale_reachable() -> bool:
 def run_sync_cycle(conn):
     state = load_state()
     failed = load_failed()
+    synced_ids = load_synced_ids()
 
     watermark = None if FORCE_FULL_SYNC else state.get('last_sync_watermark')
     is_first_run = watermark is None
 
-    products, batch_watermark = fetch_products(conn, watermark)
-    if not products:
-        logger.info("No products to sync.")
-        write_heartbeat()
-        return
+    changed_products, all_syncable_ids, batch_watermark = fetch_products(conn, watermark)
 
+    # --- Deletes: PLUs we previously synced that are no longer syncable ---
+    ids_to_delete = synced_ids - all_syncable_ids
+    if ids_to_delete:
+        logger.info(f"Deleting {len(ids_to_delete)} PLUs from scale: {sorted(ids_to_delete)}")
+        delete_records = [format_delete_plu(pid) for pid in sorted(ids_to_delete)]
+        if DRY_RUN:
+            for pid in sorted(ids_to_delete):
+                logger.info(f"DRY_RUN: DELETE PLU {pid}")
+            synced_ids -= ids_to_delete
+            save_synced_ids(synced_ids)
+        elif scale_reachable():
+            result, exc = _send_with_retry(MSG_NO_DELETE_PLU, delete_records, label='delete')
+            if result is not None:
+                synced_ids -= ids_to_delete
+                save_synced_ids(synced_ids)
+                logger.info(f"Deleted {len(ids_to_delete)} PLUs from scale successfully")
+            else:
+                logger.error(f"Delete failed: {exc}")
+
+    # --- Updates: changed products ---
     to_sync = []
-    for p in products:
+    for p in changed_products:
         if not should_sync(p):
             continue
         if is_dead_letter(p, failed):
@@ -261,7 +320,8 @@ def run_sync_cycle(conn):
         to_sync.append((p, data))
 
     if not to_sync:
-        logger.info("No valid PLU records after filtering.")
+        if not ids_to_delete:
+            logger.info("No changes to sync.")
         save_failed(failed)
         write_heartbeat()
         return
@@ -269,7 +329,7 @@ def run_sync_cycle(conn):
     logger.info(f"Syncing {len(to_sync)} PLUs to scale ({SCALE_IP}:{SCALE_PORT})")
 
     if not DRY_RUN and not scale_reachable():
-        logger.error("Scale unreachable — aborting sync cycle")
+        logger.error("Scale unreachable -- aborting sync cycle")
         return
 
     total_sent = total_updated = total_errors = 0
@@ -285,26 +345,16 @@ def run_sync_cycle(conn):
 
         if DRY_RUN:
             for p, d in chunk:
-                logger.info(f"DRY_RUN: PLU {p['id']} → {d.decode('utf-8')[:80]}...")
+                logger.info(f"DRY_RUN: PLU {p['id']} -> {d.decode('utf-8')[:80]}...")
             new_watermark = chunk_watermark if new_watermark is None else max(new_watermark, chunk_watermark)
             total_sent += len(chunk)
+            for p in products_in_chunk:
+                synced_ids.add(p['id'])
             save_state({'last_sync_watermark': new_watermark.isoformat()})
+            save_synced_ids(synced_ids)
             continue
 
-        result = None
-        last_exc = None
-        for attempt in range(3):
-            try:
-                result = send_chunk(
-                    host=SCALE_IP, port=SCALE_PORT, timeout=SCALE_TIMEOUT,
-                    msg_no=MSG_NO_FULL_PLU, records=data_blobs,
-                )
-                break
-            except (ProtocolError, Exception) as e:
-                last_exc = e
-                logger.warning(f"Chunk {chunk_idx} attempt {attempt+1}/3 failed: {e}")
-                if attempt < 2:
-                    time.sleep((2 ** attempt) + random.uniform(0, 0.5))
+        result, last_exc = _send_with_retry(MSG_NO_FULL_PLU, data_blobs, label=f'chunk {chunk_idx}')
 
         if result is None:
             for p in products_in_chunk:
@@ -320,8 +370,10 @@ def run_sync_cycle(conn):
         total_errors += result['errors']
         for p in products_in_chunk:
             reset_failed(p['id'], failed)
+            synced_ids.add(p['id'])
         new_watermark = chunk_watermark if new_watermark is None else max(new_watermark, chunk_watermark)
         save_state({'last_sync_watermark': new_watermark.isoformat()})
+        save_synced_ids(synced_ids)
         logger.info(
             f"Chunk {chunk_idx}: sent={len(chunk)} updated={result['updated']} "
             f"errors={result['errors']} {result['duration_ms']:.0f}ms"
