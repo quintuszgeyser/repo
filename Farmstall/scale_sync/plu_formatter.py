@@ -42,6 +42,10 @@ def should_sync(product: dict) -> bool:
         logger.debug(f"Skip {product['id']}: recipe type")
         return False
 
+    if not product.get('sold_by_weight'):
+        logger.debug(f"Skip {product['id']}: not sold by weight")
+        return False
+
     if product['id'] > MAX_PLU_ID:
         logger.warning(f"Skip {product['id']}: exceeds BC-4000 PLU limit ({MAX_PLU_ID})")
         return False
