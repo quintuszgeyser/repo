@@ -112,7 +112,8 @@ def format_full_plu(product: dict) -> Optional[bytes]:
         desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
         price_s    = str(price)
         barcode    = (product.get('barcode') or '').strip()
-        barcode_type = '1' if barcode else '0'  # 1 = EAN-13, 0 = none
+        barcode_type = '21' if barcode else '0'  # 21 = EAN barcode enabled (from SLP-V db)
+        pos_flag     = '20' if barcode else '0'  # 20 = POS flag enabled (from SLP-V db)
 
         fields = [
             str(plu_id),   # F0   PLU number
@@ -165,9 +166,9 @@ def format_full_plu(product: dict) -> Optional[bytes]:
             '0',           # F43  tare weight
             '0', '0', '0', '0',              # skip×4
             '0',           # F6   POS select
-            barcode_type,  # F16  barcode number type (0=none, 1=EAN-13)
+            barcode_type,  # F16  barcode number type (0=none, 21=EAN enabled)
             '0',           # skip
-            '0',           # F47  POS flag
+            pos_flag,      # F47  POS flag (0=none, 20=enabled)
             f'"{barcode}"',# F92  barcode string
             '0',           # F91  origin country
             '0',           # skip
