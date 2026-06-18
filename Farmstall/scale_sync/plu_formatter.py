@@ -148,24 +148,28 @@ def format_full_plu(product: dict) -> bytes:
     if msg2_text:
         desc += f'\x0d\x01{msg2_text}'
 
-    # Build 85-field array with confirmed positions.
-    # Positions not yet mapped remain 0.
-    f = ['0'] * 85
-    f[0]  = str(plu_no)       # confirmed: PLU number
-    f[1]  = str(plu_no)       # confirmed: ItemCode
-    f[9]  = shelf_life        # confirmed: ShelfLife (days)
-    f[28] = '0'               # confirmed: ExMessage1 (text in description instead)
-    f[29] = '0'               # confirmed: ExMessage2
-    f[30] = '0'               # confirmed: ExMessage3
-    f[43] = open_price        # suspected: OpenPrice flag (unconfirmed)
-    f[49] = f'"{desc}"'       # confirmed: Description
-    f[50] = str(sales_mode)   # confirmed: SalesMode (0=weight, 1=fixed)
-    f[51] = price_s           # confirmed: Price
-    f[52] = price_s           # confirmed: Price duplicate
-    f[61] = tare              # confirmed: Tare (integer grams)
-    f[67] = barcode_type      # confirmed: BarCodeNum (21=EAN)
-    f[69] = pos_flag          # confirmed: Posflag (20=enabled)
-    f[70] = f'"{barcode}"'    # suspected: PosCode (unconfirmed — barcode not verified)
+    # 87-field layout captured from SLP-V network traffic (ground truth).
+    # Empty string '' = reserved/unused field (not '0').
+    # Positions confirmed via field_mapper.py + Wireshark capture.
+    f = [''] * 87
+    # Set '0' for fields SLP-V sends as '0'
+    for idx in [2,3,5,7,10,11,12,17,18,23,24,28,29,30,31,35,42,46,47,48,
+                50,53,54,57,58,59,60,66,71,73,75,76,78,85,86]:
+        f[idx] = '0'
+
+    f[0]  = str(plu_no)       # PLU number = product_code
+    f[1]  = str(plu_no)       # ItemCode = product_code
+    f[9]  = shelf_life        # ShelfLife (days)
+    f[45] = open_price        # OpenPrice flag (1=open, 0=fixed)
+    f[49] = f'"{desc}"'       # Description
+    f[50] = str(sales_mode)   # SalesMode (0=weight, 1=fixed)
+    f[51] = price_s           # Price
+    f[52] = price_s           # Price duplicate
+    f[56] = '1'               # PackQuant (SLP-V always sends 1)
+    f[61] = tare              # Tare (integer grams)
+    f[67] = barcode_type      # BarCodeNum (21=EAN)
+    f[69] = pos_flag          # Posflag (20=enabled)
+    f[70] = str(plu_no)       # PosCode = product_code (unquoted string)
     fields = f
 
     return (','.join(fields) + ',').encode('utf-8')
