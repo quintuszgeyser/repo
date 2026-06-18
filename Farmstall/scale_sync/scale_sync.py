@@ -111,6 +111,27 @@ def db_connect_with_retry(retries=10, delay=3):
             logger.warning(f"DB not ready (attempt {attempt+1}/{retries}): {e}")
             time.sleep(delay)
 
+
+def wait_for_schema(conn, retries=20, delay=5):
+    """Wait until the POS has run its migrations and required tables exist."""
+    required = ['products', 'scale_sync_runs', 'scale_plu_log']
+    for attempt in range(retries):
+        try:
+            rows = conn.execute("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = ANY(%(tables)s)
+            """, {'tables': required}).fetchall()
+            found = {r['table_name'] for r in rows}
+            missing = [t for t in required if t not in found]
+            if not missing:
+                logger.info("Schema ready.")
+                return
+            logger.warning(f"Waiting for POS migrations — missing tables: {missing} (attempt {attempt+1}/{retries})")
+        except Exception as e:
+            logger.warning(f"Schema check failed: {e}")
+        time.sleep(delay)
+    raise RuntimeError(f"Required tables still missing after {retries} attempts. Is the POS running?")
+
 def fetch_scale_products(conn) -> List[dict]:
     """Fetch all products with sync_to_scale=TRUE (POS master copy).
     Commits after read to release any implicit transaction lock.
@@ -390,6 +411,7 @@ def main():
     logger.info(f"  Interval: {SYNC_INTERVAL}s  DRY_RUN={DRY_RUN}  FORCE_FULL_SYNC={FORCE_FULL_SYNC}")
 
     conn = db_connect_with_retry()
+    wait_for_schema(conn)  # wait until POS migrations have run
 
     while True:
         try:
