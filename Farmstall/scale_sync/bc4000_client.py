@@ -186,6 +186,76 @@ def _parse_response_body(raw: bytes) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
+def send_on_socket(
+    sock: socket.socket,
+    timeout: int,
+    msg_no: int,
+    records: List[bytes],
+) -> dict:
+    """
+    Send PLU records over an existing socket (server mode — scale connected to us).
+
+    Same protocol as send_chunk but caller owns the socket lifecycle.
+    """
+    global _HEX_LOG_CYCLES_REMAINING
+
+    if not records:
+        return {'updated': 0, 'errors': 0, 'error_code': 0, 'duration_ms': 0}
+
+    for rec in records:
+        if len(rec) > 60_000:
+            raise ValueError(f"Record too large for protocol: {len(rec)} bytes")
+
+    total_payload = sum(8 + len(r) for r in records)
+    if total_payload > 10_000_000:
+        raise ValueError(f"Total payload too large: {total_payload} bytes")
+
+    t0 = time.monotonic()
+    sock.settimeout(timeout)
+
+    sock.sendall(_build_header(msg_no, total_payload))
+    for i, rec in enumerate(records):
+        sock.sendall(_build_subheader(msg_no, len(rec), is_first=(i == 0)))
+        sock.sendall(rec)
+
+    raw_hdr = _recv_exact(sock, 8)
+    if _HEX_LOG_CYCLES_REMAINING > 0:
+        logger.debug(f"Response header hex: {raw_hdr.hex()}")
+        _HEX_LOG_CYCLES_REMAINING -= 1
+
+    resp_hdr = _parse_response_header(raw_hdr)
+    logger.debug(f"Response header: {resp_hdr}")
+
+    if resp_hdr['msg_no'] != msg_no:
+        raise ProtocolError(f"MsgNo mismatch: sent {msg_no}, got {resp_hdr['msg_no']}")
+    if resp_hdr['result'] != 0:
+        raise ProtocolError(f"Scale returned error result: {resp_hdr['result']}")
+
+    raw_body = _recv_exact(sock, 12)
+    resp_body = _parse_response_body(raw_body)
+    logger.debug(f"Response body: {resp_body}")
+
+    if resp_body['status'] != 0:
+        raise ProtocolError(f"Scale status error: {resp_body['status']}")
+    if resp_body['records_received'] != len(records):
+        raise ProtocolError(
+            f"RecordsReceived mismatch: sent {len(records)}, "
+            f"scale ack'd {resp_body['records_received']}"
+        )
+    if resp_body['records_errors'] != 0:
+        raise ProtocolError(f"Scale reported {resp_body['records_errors']} record errors")
+    if resp_body['error_code'] != 0:
+        raise ProtocolError(f"Scale returned non-zero error_code: {resp_body['error_code']}")
+
+    duration_ms = (time.monotonic() - t0) * 1000
+    return {
+        'updated': resp_body['records_updated'],
+        'errors': resp_body['records_errors'],
+        'error_code': resp_body['error_code'],
+        'duration_ms': duration_ms,
+    }
+
+
 def send_chunk(
     host: str,
     port: int,
