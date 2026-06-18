@@ -112,9 +112,11 @@ def format_full_plu(product: dict) -> Optional[bytes]:
         # Ishida 2-line description: \x0d\xNN = newline + font code
         desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
         price_s    = str(price)
-        barcode    = (product.get('barcode') or '').strip()
-        barcode_type = '21' if barcode else '0'  # 21 = EAN barcode enabled (from SLP-V db)
-        pos_flag     = '20' if barcode else '0'  # 20 = POS flag enabled (from SLP-V db)
+        # SLP-V uses PosCode=PLU_number and BarCodeNum=21, Posflag=20 to generate
+        # the label barcode from the PLU number. We match that exactly.
+        barcode      = str(plu_id)   # PosCode = PLU number (same as SLP-V)
+        barcode_type = '21'          # BarCodeNum=21 (EAN barcode enabled)
+        pos_flag     = '20'          # Posflag=20 (POS barcode enabled)
 
         fields = [
             str(plu_id),   # F0   PLU number
