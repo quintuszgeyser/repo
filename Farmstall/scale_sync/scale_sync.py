@@ -92,11 +92,13 @@ def write_summary(sent, failed, deleted, orphans):
 # ---------------------------------------------------------------------------
 
 def _db_connect():
-    return psycopg.connect(
+    conn = psycopg.connect(
         host=POSTGRES_HOST, port=POSTGRES_PORT,
         dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD,
         connect_timeout=10, row_factory=psycopg.rows.dict_row,
+        autocommit=True,  # each statement commits immediately — no idle transactions blocking migrations
     )
+    return conn
 
 def db_connect_with_retry(retries=10, delay=3):
     for attempt in range(retries):
