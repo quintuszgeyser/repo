@@ -154,8 +154,9 @@ def mark_product_failed(conn, product_id: int, error: str):
 
 def create_sync_run(conn, run_type: str) -> int:
     row = conn.execute("""
-        INSERT INTO scale_sync_runs (run_type, status)
-        VALUES (%(run_type)s, 'running')
+        INSERT INTO scale_sync_runs (started_at, run_type, status,
+            products_total, products_sent, products_failed, orphans_detected, orphans_removed)
+        VALUES (NOW(), %(run_type)s, 'running', 0, 0, 0, 0, 0)
         RETURNING id
     """, {'run_type': run_type}).fetchone()
     return row['id']

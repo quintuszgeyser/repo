@@ -103,10 +103,9 @@ def compute_scale_hash(product: dict) -> str:
         str(1 if product.get('sold_by_weight') else 0),
         str(product.get('scale_tare') or 0),
         str(product.get('scale_shelf_life') or 0),
-        str(product.get('scale_pack_qty') or 0),
         str(1 if product.get('scale_open_price') else 0),
-        str(product.get('scale_msg1') or 0),
-        str(product.get('scale_msg2') or 0),
+        str((product.get('scale_msg1') or '').strip()[:20]),
+        str((product.get('scale_msg2') or '').strip()[:20]),
         str(1 if product.get('scale_prohibit') else 0),
     ]
     return hashlib.sha256('|'.join(parts).encode()).hexdigest()
@@ -136,10 +135,14 @@ def format_full_plu(product: dict) -> bytes:
     # Scale-specific overrides from product
     tare       = str(int(float(product.get('scale_tare') or 0) * 1000))  # g → mg for protocol
     shelf_life = str(product.get('scale_shelf_life') or 0)
-    pack_qty   = str(product.get('scale_pack_qty') or 0)
     open_price = '1' if product.get('scale_open_price') else '0'
-    msg1       = str(product.get('scale_msg1') or 0)
-    msg2       = str(product.get('scale_msg2') or 0)
+    # Messages stored as text — append to description if set
+    msg1_text  = (product.get('scale_msg1') or '').strip()[:20]
+    msg2_text  = (product.get('scale_msg2') or '').strip()[:20]
+    if msg1_text:
+        desc += f'\x0d\x01{msg1_text}'
+    if msg2_text:
+        desc += f'\x0d\x01{msg2_text}'
 
     fields = [
         str(plu_no),   # F0   PLU number = product_code (NOT database id)
@@ -162,8 +165,8 @@ def format_full_plu(product: dict) -> bytes:
         '0',           # F71  dept code
         '0',           # F72  group code
         '0', '0', '0',
-        msg1,          # ExMsg1
-        msg2,          # ExMsg2
+        '0',           # ExMsg1 (text appended to description instead)
+        '0',           # ExMsg2
         '0',           # ExMsg3
         '0',           # Coupon
         '0', '0',
@@ -184,7 +187,7 @@ def format_full_plu(product: dict) -> bytes:
         '0',           # F3   markdown flag
         '0',           # F66  markdown price
         '0',           # skip
-        pack_qty,      # F42  pack quantity
+        '0',           # F42  pack quantity (removed)
         '0',           # F17  unit type
         '0',           # F64  fixed weight
         '0',           # F69  upper weight limit
