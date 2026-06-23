@@ -3,11 +3,13 @@ BC-4000 Scale Sync Service
 
 POS is the single source of truth. Scale is a downstream cache.
 
-Polls PostgreSQL every SYNC_INTERVAL_SEC seconds.
-Sends only products where sync_to_scale=TRUE and scale_hash differs.
-Deletes PLUs on scale that no longer exist in POS (by product_code).
+Architecture (confirmed from Wireshark 2026-06-23):
+  - PC connects OUT to scale:7061 (scale is the server)
+  - Poll loop runs every SYNC_INTERVAL_SEC seconds
+  - On each cycle: connect, push changed PLUs, disconnect
+  - Auto-reconnects after any scale or PC restart — no manual intervention needed
 
-Protocol: Ishida Slp4000 — MsgNo 1001 (send) / 2023 (delete).
+Protocol: MsgNo 1001 (PLU push), MsgNo 0026 (status/delete)
 """
 import json
 import logging
@@ -17,16 +19,16 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import psycopg
 import psycopg.rows
 
-from bc4000_client import send_chunk, ProtocolError
+from bc4000_client import send_chunk, poll_status, ProtocolError, MSG_NO_PLU_SEND
 from plu_formatter import (
     should_sync, validate_for_scale, format_full_plu, format_delete_plu,
     format_prohibit_plu, compute_scale_hash, ScaleSyncValidationError,
-    MSG_NO_FULL_PLU, MSG_NO_DELETE_PLU,
+    MSG_NO_FULL_PLU, MSG_NO_KEYBOARD, MSG_NO_ADVERT,
 )
 
 # ---------------------------------------------------------------------------
@@ -52,13 +54,11 @@ FORCE_FULL_SYNC = os.environ.get('FORCE_FULL_SYNC', 'false').lower() == 'true'
 # Hard QA safety: QA must never send to real scale regardless of config
 if APP_ENV == 'qa':
     if not DRY_RUN:
-        import sys
         print(f"[QA][SAFETY] DRY_RUN=false in QA — forcing DRY_RUN=true", file=sys.stderr)
         DRY_RUN = True
 
 LOG_PREFIX = f"[{APP_ENV.upper()}][{POSTGRES_DB}][{SCALE_IP}]"
 
-# DATA_DIR scoped per environment — separate state files for QA and PROD
 DATA_DIR       = Path('/data') / APP_ENV
 SUMMARY_FILE   = DATA_DIR / 'sync_summary.json'
 HEARTBEAT_FILE = DATA_DIR / 'last_success.timestamp'
@@ -103,13 +103,12 @@ def write_summary(sent, failed, deleted, orphans):
 # ---------------------------------------------------------------------------
 
 def _db_connect():
-    conn = psycopg.connect(
+    return psycopg.connect(
         host=POSTGRES_HOST, port=POSTGRES_PORT,
         dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD,
         connect_timeout=10, row_factory=psycopg.rows.dict_row,
-        autocommit=True,  # each statement commits immediately — no idle transactions blocking migrations
+        autocommit=True,
     )
-    return conn
 
 def db_connect_with_retry(retries=10, delay=3):
     for attempt in range(retries):
@@ -124,7 +123,6 @@ def db_connect_with_retry(retries=10, delay=3):
 
 
 def wait_for_schema(conn, retries=20, delay=5):
-    """Wait until the POS has run its migrations and required tables exist."""
     required = ['products', 'scale_sync_runs', 'scale_plu_log']
     for attempt in range(retries):
         try:
@@ -137,19 +135,84 @@ def wait_for_schema(conn, retries=20, delay=5):
             if not missing:
                 logger.info("Schema ready.")
                 return
-            logger.warning(f"Waiting for POS migrations — missing tables: {missing} (attempt {attempt+1}/{retries})")
+            logger.warning(f"Waiting for POS migrations — missing: {missing} (attempt {attempt+1}/{retries})")
         except Exception as e:
             logger.warning(f"Schema check failed: {e}")
         time.sleep(delay)
-    raise RuntimeError(f"Required tables still missing after {retries} attempts. Is the POS running?")
+    raise RuntimeError(f"Required tables still missing after {retries} attempts.")
+
+def fetch_keyboard_presets(conn) -> List[dict]:
+    """Fetch all 170 keyboard slots. Empty slots come back as plu_no=NULL."""
+    rows = conn.execute("""
+        SELECT key_id, plu_no, label
+        FROM scale_keyboard_presets
+        ORDER BY key_id
+    """).fetchall()
+    conn.commit()
+    preset_map = {r['key_id']: r for r in rows}
+
+    # Build lookup: key_id → product_code
+    plu_ids = [r['plu_no'] for r in rows if r['plu_no']]
+    product_codes = {}
+    if plu_ids:
+        prod_rows = conn.execute("""
+            SELECT id, product_code FROM products WHERE id = ANY(%(ids)s)
+        """, {'ids': plu_ids}).fetchall()
+        conn.commit()
+        product_codes = {r['id']: r['product_code'] for r in prod_rows}
+
+    slots = []
+    for key_id in range(1, 171):
+        p = preset_map.get(key_id)
+        plu_no = 0
+        if p and p['plu_no']:
+            plu_no = product_codes.get(p['plu_no'], 0)
+        slots.append({'key_id': key_id, 'plu_no': plu_no})
+    return slots
+
+
+def fetch_advert_messages(conn) -> List[dict]:
+    """Fetch all 43 advert slots."""
+    rows = conn.execute("""
+        SELECT slot, display_no, text, enabled
+        FROM scale_advert_messages
+        ORDER BY slot
+    """).fetchall()
+    conn.commit()
+    advert_map = {r['slot']: r for r in rows}
+
+    slots = []
+    for slot in range(1, 44):
+        a = advert_map.get(slot)
+        slots.append({
+            'slot':       slot,
+            'display_no': a['display_no'] if a else 2,
+            'text':       a['text'] if a else '',
+            'enabled':    a['enabled'] if a else False,
+        })
+    return slots
+
+
+def format_keyboard_record(slot: dict) -> bytes:
+    """Format one keyboard preset record for MsgNo 1024."""
+    plu_no = slot['plu_no'] or 0
+    assigned = 1 if plu_no else 0
+    csv = f"{slot['key_id']},0,{assigned},{plu_no},"
+    return csv.encode('utf-8')
+
+
+def format_advert_record(slot: dict) -> bytes:
+    """Format one advertisement record for MsgNo 1029."""
+    text    = (slot['text'] or '').replace('"', '""')
+    enabled = 1 if slot['enabled'] and slot['text'] else 0
+    csv = f"{slot['slot']},{slot['display_no']},0,0,\"{text}\",{enabled},"
+    return csv.encode('utf-8')
+
 
 def fetch_scale_products(conn) -> List[dict]:
-    """Fetch all products with sync_to_scale=TRUE (POS master copy).
-    Commits after read to release any implicit transaction lock.
-    """
     rows = conn.execute("""
         SELECT id, name, price, price_per_unit, sold_by_weight,
-               is_archived, is_for_sale, product_type, updated_at,
+               is_archived, is_for_sale, product_type,
                barcode, product_code, sync_to_scale,
                scale_tare, scale_shelf_life, scale_pack_qty,
                scale_open_price, scale_msg1, scale_msg2, scale_prohibit,
@@ -158,13 +221,10 @@ def fetch_scale_products(conn) -> List[dict]:
         WHERE sync_to_scale = TRUE
         ORDER BY product_code
     """).fetchall()
-    conn.commit()  # release implicit transaction — prevent lock blocking POS migrations
+    conn.commit()
     return rows
 
 def fetch_synced_codes(conn) -> set:
-    """Get ALL product_codes ever successfully synced to scale.
-    Catches orphans from: archived, sync disabled, type changed, deleted, PLU changed.
-    """
     rows = conn.execute("""
         SELECT product_code FROM products
         WHERE scale_last_sync_status IN ('ok', 'plu_changed')
@@ -173,9 +233,7 @@ def fetch_synced_codes(conn) -> set:
     conn.commit()
     return {r['product_code'] for r in rows}
 
-
 def fetch_plu_changed(conn) -> list:
-    """Get products where PLU was changed — need to remove OLD PLU from scale first."""
     rows = conn.execute("""
         SELECT p.id, p.product_code as new_plu, l.old_plu
         FROM products p
@@ -230,25 +288,23 @@ def complete_sync_run(conn, run_id: int, status: str, sent=0, failed=0, orphans=
           'orphans': orphans, 'removed': removed, 'error': error, 'id': run_id})
 
 # ---------------------------------------------------------------------------
-# Scale connectivity
+# Scale connectivity (outbound — we connect to scale)
 # ---------------------------------------------------------------------------
 
 def scale_reachable() -> bool:
     if APP_ENV == 'qa':
-        logger.debug(f"{LOG_PREFIX} Scale reachability check blocked in QA")
-        return False  # Layer 2 of 3: QA never polls real scale
-    import socket
+        return False
+    import socket as _socket
     try:
-        s = socket.create_connection((SCALE_IP, SCALE_PORT), timeout=SCALE_TIMEOUT)
+        s = _socket.create_connection((SCALE_IP, SCALE_PORT), timeout=SCALE_TIMEOUT)
         s.close()
         return True
     except Exception as e:
-        logger.error(f"{LOG_PREFIX} Scale unreachable at {SCALE_IP}:{SCALE_PORT} -- {e}")
+        logger.warning(f"{LOG_PREFIX} Scale unreachable at {SCALE_IP}:{SCALE_PORT} — {e}")
         return False
 
 def _send_with_retry(msg_no, records, label=''):
     if APP_ENV == 'qa':
-        # Layer 2 hard block — QA cannot send to scale under any circumstances
         raise RuntimeError(f"{LOG_PREFIX} [SAFETY] Blocked scale write in QA: {label}")
     for attempt in range(3):
         try:
@@ -274,13 +330,11 @@ def chunked(lst, size):
 def run_sync_cycle(conn):
     products = fetch_scale_products(conn)
 
-    # Build work lists
-    to_send    = []   # (product, payload_bytes, hash)
-    to_skip    = []   # already in sync
+    to_send           = []
+    to_skip           = []
     validation_errors = []
 
     for p in products:
-        # Skip archived/no-price products (clean exit, mark appropriately)
         if p['is_archived'] or not p['is_for_sale']:
             continue
 
@@ -307,21 +361,20 @@ def run_sync_cycle(conn):
 
         to_send.append((p, payload, new_hash))
 
-    # --- PLU changes: prohibit old PLU before sending new ---
+    # PLU changes: delete old PLU from scale before sending new one
     plu_changes = fetch_plu_changed(conn)
     if plu_changes:
         logger.info(f"PLU changes pending: {[(r['old_plu'], r['new_plu']) for r in plu_changes]}")
         old_plu_records = [format_prohibit_plu(r['old_plu']) for r in plu_changes]
         if DRY_RUN:
             for r in plu_changes:
-                logger.info(f"DRY_RUN: prohibit old PLU {r['old_plu']} (changed to {r['new_plu']})")
-        elif scale_reachable():
+                logger.info(f"DRY_RUN: prohibit old PLU {r['old_plu']} (→ {r['new_plu']})")
+        else:
             result, exc = _send_with_retry(MSG_NO_FULL_PLU, old_plu_records, label='prohibit old PLUs')
             if result is not None:
                 conn.execute("""
                     UPDATE scale_plu_log SET sync_cleared = TRUE
-                    WHERE sync_cleared = FALSE
-                      AND old_plu = ANY(%(old_plus)s)
+                    WHERE sync_cleared = FALSE AND old_plu = ANY(%(old_plus)s)
                 """, {'old_plus': [r['old_plu'] for r in plu_changes]})
                 conn.execute("""
                     UPDATE products SET scale_last_sync_status = NULL, scale_hash = NULL
@@ -331,7 +384,7 @@ def run_sync_cycle(conn):
             else:
                 logger.error(f"Failed to prohibit old PLUs: {exc}")
 
-    # Detect orphans: PLUs previously synced that no longer have sync_to_scale=TRUE
+    # Orphan detection: PLUs previously synced that are no longer active
     synced_codes = fetch_synced_codes(conn)
     active_codes = {p['product_code'] for p in products if p.get('product_code')}
     orphan_codes = synced_codes - active_codes
@@ -347,15 +400,15 @@ def run_sync_cycle(conn):
     logger.info(f"Pending: {len(to_send)} products to send, {len(orphan_codes)} orphans to delete")
 
     if not DRY_RUN and not scale_reachable():
-        logger.error("Scale unreachable -- aborting sync cycle")
+        logger.error(f"{LOG_PREFIX} Scale unreachable — skipping sync cycle, will retry in {SYNC_INTERVAL}s")
         return
 
     run_id = create_sync_run(conn, 'full' if FORCE_FULL_SYNC else 'incremental')
-    conn.commit()  # persist run record immediately
+    conn.commit()
 
     total_sent = total_failed = 0
 
-    # --- Send updated PLUs ---
+    # Send updated PLUs
     for chunk in chunked(to_send, CHUNK_SIZE):
         products_in_chunk = [p for p, _, _ in chunk]
         payloads          = [pl for _, pl, _ in chunk]
@@ -369,7 +422,7 @@ def run_sync_cycle(conn):
             conn.commit()
             continue
 
-        result, exc = _send_with_retry(MSG_NO_FULL_PLU, payloads, label=f'send chunk')
+        result, exc = _send_with_retry(MSG_NO_FULL_PLU, payloads, label='send chunk')
         if result is None:
             for p in products_in_chunk:
                 mark_product_failed(conn, p['id'], str(exc))
@@ -381,15 +434,12 @@ def run_sync_cycle(conn):
                 mark_product_synced(conn, p['id'], hashes[p['id']])
                 total_sent += 1
             conn.commit()
-            logger.info(f"Sent {len(chunk)} PLUs: updated={result['updated']} errors={result['errors']} {result['duration_ms']:.0f}ms")
+            logger.info(f"Sent {len(chunk)} PLUs: updated={result['updated']} {result['duration_ms']:.0f}ms")
 
-    # --- Remove orphan PLUs by overwriting with a zeroed/disabled record ---
-    # MsgNo 2023 (delete) is unreliable — scale returns status 20 for some PLUs.
-    # Instead we overwrite with a zero-price "REMOVED" record using MsgNo 1001.
+    # Remove orphan PLUs by overwriting with a prohibited/zeroed record
     orphans_removed = 0
     if orphan_codes:
-        logger.info(f"Prohibiting {len(orphan_codes)} orphan PLUs on scale: {sorted(orphan_codes)}")
-        # Use prohibit format: REMOVED, price=0, barcode disabled — safer than zero-out
+        logger.info(f"Prohibiting {len(orphan_codes)} orphan PLUs: {sorted(orphan_codes)}")
         zero_records = [format_prohibit_plu(code) for code in sorted(orphan_codes)]
 
         if DRY_RUN:
@@ -405,7 +455,7 @@ def run_sync_cycle(conn):
                     WHERE product_code = ANY(%(codes)s)
                 """, {'codes': list(orphan_codes)})
                 conn.commit()
-                logger.info(f"Zeroed {orphans_removed} orphan PLUs on scale")
+                logger.info(f"Zeroed {orphans_removed} orphan PLUs")
             else:
                 logger.error(f"Orphan zero-out failed: {exc}")
 
@@ -417,8 +467,34 @@ def run_sync_cycle(conn):
     write_summary(total_sent, total_failed, orphans_removed, len(orphan_codes))
     logger.info(f"Sync complete: sent={total_sent} failed={total_failed} orphans_removed={orphans_removed}")
 
+    # Push keyboard presets
+    if not DRY_RUN:
+        try:
+            kb_slots = fetch_keyboard_presets(conn)
+            kb_records = [format_keyboard_record(s) for s in kb_slots]
+            result, exc = _send_with_retry(MSG_NO_KEYBOARD, kb_records, label='keyboard presets')
+            if result is not None:
+                logger.info(f"Keyboard presets sent: updated={result['updated']} {result['duration_ms']:.0f}ms")
+            else:
+                logger.warning(f"Keyboard preset sync failed: {exc}")
+        except Exception as e:
+            logger.warning(f"Keyboard preset sync error: {e}")
+
+    # Push advert messages
+    if not DRY_RUN:
+        try:
+            ad_slots = fetch_advert_messages(conn)
+            ad_records = [format_advert_record(s) for s in ad_slots]
+            result, exc = _send_with_retry(MSG_NO_ADVERT, ad_records, label='advert messages')
+            if result is not None:
+                logger.info(f"Advert messages sent: updated={result['updated']} {result['duration_ms']:.0f}ms")
+            else:
+                logger.warning(f"Advert message sync failed: {exc}")
+        except Exception as e:
+            logger.warning(f"Advert message sync error: {e}")
+
 # ---------------------------------------------------------------------------
-# Entry point
+# Entry point — outbound poll loop (auto-reconnects on scale/PC restart)
 # ---------------------------------------------------------------------------
 
 def main():
@@ -428,23 +504,30 @@ def main():
     logger.info(f"{LOG_PREFIX}   Database: {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
     logger.info(f"{LOG_PREFIX}   Interval: {SYNC_INTERVAL}s  DRY_RUN={DRY_RUN}  FORCE_FULL_SYNC={FORCE_FULL_SYNC}")
     if APP_ENV == 'qa':
-        logger.warning(f"{LOG_PREFIX}   QA MODE: Scale writes BLOCKED (3 layers: DRY_RUN + code guard + SCALE_IP={SCALE_IP})")
+        logger.warning(f"{LOG_PREFIX}   QA MODE: Scale writes BLOCKED")
 
     conn = db_connect_with_retry()
-    wait_for_schema(conn)  # wait until POS migrations have run
+    wait_for_schema(conn)
 
     while True:
         try:
+            # Reconnect DB if connection dropped
+            try:
+                conn.execute("SELECT 1")
+            except Exception:
+                logger.warning(f"{LOG_PREFIX} DB connection lost — reconnecting")
+                try: conn.close()
+                except Exception: pass
+                conn = db_connect_with_retry(retries=5, delay=5)
+
             run_sync_cycle(conn)
+
         except Exception as e:
-            logger.error(f"Sync cycle error: {e}", exc_info=True)
-            try: conn.close()
-            except Exception: pass
-            try: conn = db_connect_with_retry(retries=5, delay=5)
-            except Exception as ce: logger.error(f"Could not reconnect: {ce}")
+            logger.error(f"{LOG_PREFIX} Sync cycle error: {e}", exc_info=True)
 
         logger.debug(f"Sleeping {SYNC_INTERVAL}s")
         time.sleep(SYNC_INTERVAL)
+
 
 if __name__ == '__main__':
     main()

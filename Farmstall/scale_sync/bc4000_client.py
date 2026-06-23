@@ -1,11 +1,33 @@
 """
-BC-4000 scale TCP/IP client using the Slp4000 protocol.
+BC-4000 scale TCP/IP client — protocol confirmed via Wireshark captures 2026-06-23.
 
-Protocol reverse-engineered from Ishida SLP-V SlpDbServer.dll (decompiled with dnSpy).
-Port: 7061
-Encoding: packed BCD for integers, big-endian uint32/uint16 for sizes.
+Architecture: PC connects OUT to scale:7061 (scale is the server).
+
+Message types confirmed:
+  MsgNo 0026 — Status poll + delete
+  MsgNo 1001 — Full PLU push
+  MsgNo 1024 — Keyboard presets
+  MsgNo 1029 — Advertisement messages
+
+Frame format (all messages):
+  Header   (8 bytes): MsgNo(2 BCD) + 00 00 00 00 + record_count(2 uint16)
+  Per record:
+    Subheader (8 bytes): MsgNo(2 BCD) + is_first(1) + 00 00 00 + data_size(2 uint16)
+    Data:                CSV bytes
+
+Scale response (20 bytes, sent after every ~80 records and at end):
+  Bytes  0-1: MsgNo BCD (echo)
+  Bytes  2-7: flags / padding
+  Bytes  8-11: 00 00 00 00
+  Bytes 12-13: records updated (uint16)
+  Bytes 14-15: records total in batch (uint16)
+  Bytes 16-19: 00 00 00 00
+
+After each 20-byte scale response, PC must send an 8-byte ack:
+  MsgNo(2 BCD) + 00 00 00 00 + cumulative_records_acked(2 uint16)
 """
 import logging
+import select
 import socket
 import struct
 import time
@@ -13,8 +35,12 @@ from typing import List
 
 logger = logging.getLogger('bc4000_client')
 
-# Number of initial cycles to log raw hex (for protocol offset validation)
-_HEX_LOG_CYCLES_REMAINING = 3
+MSG_NO_PLU_SEND   = 1001
+MSG_NO_STATUS     = 26
+MSG_NO_KEYBOARD   = 1024
+MSG_NO_ADVERT     = 1029
+
+BATCH_SIZE = 80  # scale sends a mid-ack every ~80 records
 
 
 class ProtocolError(Exception):
@@ -22,17 +48,11 @@ class ProtocolError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Encoding helpers (direct ports of SlpConvert methods)
+# Encoding helpers
 # ---------------------------------------------------------------------------
 
 def num2bcd(value: int, num_digits: int) -> bytes:
-    """
-    Pack an integer into BCD (Binary Coded Decimal), num_digits digits.
-
-    From Num2Bcd() in SlpConvert:
-      num2bcd(1001, 4) == b'\\x10\\x01'
-      num2bcd(1234, 4) == b'\\x12\\x34'
-    """
+    """Pack integer into packed BCD. num2bcd(1001, 4) == b'\\x10\\x01'"""
     num_bytes = (num_digits + 1) // 2
     result = bytearray(num_bytes)
     pos = num_bytes - 1
@@ -48,7 +68,7 @@ def num2bcd(value: int, num_digits: int) -> bytes:
 
 
 def bcd2num(data: bytes, offset: int, num_digits: int):
-    """Decode packed BCD → (value, new_offset). From Bcd2Num() in SlpConvert."""
+    """Decode packed BCD → (value, new_offset)."""
     num_bytes = (num_digits + 1) // 2
     result = 0
     for i in range(num_bytes):
@@ -59,32 +79,11 @@ def bcd2num(data: bytes, offset: int, num_digits: int):
     return result, offset + num_bytes
 
 
-def num2nl(value: int) -> bytes:
-    """Big-endian uint32. From Num2nl() in SlpConvert."""
-    return struct.pack('>I', value)
-
-
-def num2ns(value: int) -> bytes:
-    """Big-endian uint16. From Num2ns() in SlpConvert."""
-    return struct.pack('>H', value)
-
-
-def nl2num(data: bytes, offset: int):
-    """Decode big-endian uint32 → (value, new_offset). From Nl2Num()."""
-    return struct.unpack_from('>I', data, offset)[0], offset + 4
-
-
-def ns2num(data: bytes, offset: int):
-    """Decode big-endian uint16 → (value, new_offset). From Ns2Num()."""
-    return struct.unpack_from('>H', data, offset)[0], offset + 2
-
-
 # ---------------------------------------------------------------------------
-# Low-level socket helpers
+# Socket helpers
 # ---------------------------------------------------------------------------
 
 def _recv_exact(sock: socket.socket, n: int) -> bytes:
-    """Receive exactly n bytes; raises ProtocolError on close or timeout."""
     buf = bytearray()
     while len(buf) < n:
         try:
@@ -97,163 +96,71 @@ def _recv_exact(sock: socket.socket, n: int) -> bytes:
     return bytes(buf)
 
 
+def _has_data(sock: socket.socket, timeout: float = 0.05) -> bool:
+    r, _, _ = select.select([sock], [], [], timeout)
+    return bool(r)
+
+
 # ---------------------------------------------------------------------------
 # Protocol framing
 # ---------------------------------------------------------------------------
 
-def _build_header(msg_no: int, total_payload_size: int) -> bytes:
-    """
-    8-byte send header (SendHeader in Slp4000Scale):
-      Bytes 0-1: MsgNo as BCD (4 digits)
-      Bytes 2-3: 0x00
-      Bytes 4-7: (total_payload_size + 8) as big-endian uint32
-    """
+def _build_header(msg_no: int, record_count: int) -> bytes:
+    """8-byte header: MsgNo(2 BCD) + 00 00 00 00 + record_count(2 uint16)"""
     hdr = bytearray(8)
     hdr[0:2] = num2bcd(msg_no, 4)
-    hdr[4:8] = num2nl(total_payload_size + 8)
+    struct.pack_into('>H', hdr, 6, record_count)
     return bytes(hdr)
 
 
-def _build_subheader(msg_no: int, data_size: int, is_first: bool) -> bytes:
-    """
-    8-byte sub-header (SendSubHeader in Slp4000Scale):
-      Bytes 0-1: MsgNo as BCD (4 digits)
-      Byte  2:   1 if first record in chunk, else 0
-      Bytes 3-5: 0x00
-      Bytes 6-7: data_size as big-endian uint16
-    """
+def _build_subheader(msg_no: int, data_size: int, is_first: bool = False) -> bytes:
+    """8-byte subheader: MsgNo(2 BCD) + is_first(1) + 00 00 00 + data_size(2 uint16)"""
     sub = bytearray(8)
     sub[0:2] = num2bcd(msg_no, 4)
     sub[2] = 1 if is_first else 0
-    sub[6:8] = num2ns(data_size)
+    struct.pack_into('>H', sub, 6, data_size)
     return bytes(sub)
 
 
-def _parse_response_header(raw: bytes) -> dict:
-    """
-    8-byte response header (ConvertHeaderToBin in Slp4000Scale, non-Astra path):
-      Bytes 0-1: MsgNo as BCD (4 digits) → 2 bytes, offset advances by 2
-      Bytes 2-3: DeviceType as BCD (2 digits) → 1 byte, offset advances by 1 (but parsed as 2-digit BCD)
-      Byte  5:   Result (raw byte, 0 = success)
-      Bytes 4-7: total_size as big-endian uint32
-
-    Decompiled code:
-      header.m_nMsgNo      = Bcd2Num(buf, ref num, 4)   → reads 2 bytes, num=2
-      header.m_nDeviceType = Bcd2Num(buf, ref num, 2)   → reads 1 byte, num=3
-      header.m_nResult     = buf[num]; num++             → byte 3, num=4
-      header.m_nSize       = Nl2Num(buf, ref num)        → bytes 4-7
-    """
-    offset = 0
-    msg_no, offset = bcd2num(raw, offset, 4)       # offset=2
-    device_type, offset = bcd2num(raw, offset, 2)  # offset=3
-    result = raw[offset]; offset += 1              # offset=4
-    total_size, offset = nl2num(raw, offset)       # offset=8
-    return {
-        'msg_no': msg_no,
-        'device_type': device_type,
-        'result': result,
-        'total_size': total_size,
-    }
+def _build_ack(msg_no: int, cumulative_records: int) -> bytes:
+    """8-byte PC ack after each scale mid-response."""
+    ack = bytearray(8)
+    ack[0:2] = num2bcd(msg_no, 4)
+    struct.pack_into('>H', ack, 6, cumulative_records)
+    return bytes(ack)
 
 
-def _parse_response_body(raw: bytes) -> dict:
-    """
-    12-byte response body (ConvertResponseToBin, nFlg=0, non-Astra):
-      Byte  0:   Status as BCD (2 digits, 1 byte)
-      Bytes 1-3: skip (3 bytes)
-      Bytes 4-5: RecordsReceived as BCD (4 digits, 2 bytes)
-      Bytes 6-7: RecordsUpdated as BCD (4 digits, 2 bytes)
-      Bytes 8-9: RecordsWithErrors as BCD (4 digits, 2 bytes)
-      Bytes 10-11: ErrorCode as big-endian uint16
-    """
-    offset = 0
-    status, offset = bcd2num(raw, offset, 2)          # offset=1
-    offset += 3                                        # skip → offset=4
-    received, offset = bcd2num(raw, offset, 4)        # offset=6
-    updated, offset = bcd2num(raw, offset, 4)         # offset=8
-    errors, offset = bcd2num(raw, offset, 4)          # offset=10
-    error_code, offset = ns2num(raw, offset)           # offset=12
-    return {
-        'status': status,
-        'records_received': received,
-        'records_updated': updated,
-        'records_errors': errors,
-        'error_code': error_code,
-    }
+def _parse_response(raw: bytes) -> dict:
+    """Parse 20-byte scale response."""
+    if len(raw) < 20:
+        raise ProtocolError(f"Short response: expected 20 bytes, got {len(raw)}")
+    msg_no, _ = bcd2num(raw, 0, 4)
+    updated = struct.unpack_from('>H', raw, 12)[0]
+    total   = struct.unpack_from('>H', raw, 14)[0]
+    return {'msg_no': msg_no, 'updated': updated, 'total': total}
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def send_on_socket(
-    sock: socket.socket,
-    timeout: int,
-    msg_no: int,
-    records: List[bytes],
-) -> dict:
+def poll_status(host: str, port: int, timeout: int) -> dict:
     """
-    Send PLU records over an existing socket (server mode — scale connected to us).
-
-    Same protocol as send_chunk but caller owns the socket lifecycle.
+    MsgNo 0026 status poll — returns PLU count on scale.
+    Also used to delete a single PLU: include plu_no in extra_data.
     """
-    global _HEX_LOG_CYCLES_REMAINING
-
-    if not records:
-        return {'updated': 0, 'errors': 0, 'error_code': 0, 'duration_ms': 0}
-
-    for rec in records:
-        if len(rec) > 60_000:
-            raise ValueError(f"Record too large for protocol: {len(rec)} bytes")
-
-    total_payload = sum(8 + len(r) for r in records)
-    if total_payload > 10_000_000:
-        raise ValueError(f"Total payload too large: {total_payload} bytes")
-
-    t0 = time.monotonic()
-    sock.settimeout(timeout)
-
-    sock.sendall(_build_header(msg_no, total_payload))
-    for i, rec in enumerate(records):
-        sock.sendall(_build_subheader(msg_no, len(rec), is_first=(i == 0)))
-        sock.sendall(rec)
-
-    raw_hdr = _recv_exact(sock, 8)
-    if _HEX_LOG_CYCLES_REMAINING > 0:
-        logger.debug(f"Response header hex: {raw_hdr.hex()}")
-        _HEX_LOG_CYCLES_REMAINING -= 1
-
-    resp_hdr = _parse_response_header(raw_hdr)
-    logger.debug(f"Response header: {resp_hdr}")
-
-    if resp_hdr['msg_no'] != msg_no:
-        raise ProtocolError(f"MsgNo mismatch: sent {msg_no}, got {resp_hdr['msg_no']}")
-    if resp_hdr['result'] != 0:
-        raise ProtocolError(f"Scale returned error result: {resp_hdr['result']}")
-
-    raw_body = _recv_exact(sock, 12)
-    resp_body = _parse_response_body(raw_body)
-    logger.debug(f"Response body: {resp_body}")
-
-    if resp_body['status'] != 0:
-        raise ProtocolError(f"Scale status error: {resp_body['status']}")
-    if resp_body['records_received'] != len(records):
-        raise ProtocolError(
-            f"RecordsReceived mismatch: sent {len(records)}, "
-            f"scale ack'd {resp_body['records_received']}"
-        )
-    if resp_body['records_errors'] != 0:
-        raise ProtocolError(f"Scale reported {resp_body['records_errors']} record errors")
-    if resp_body['error_code'] != 0:
-        raise ProtocolError(f"Scale returned non-zero error_code: {resp_body['error_code']}")
-
-    duration_ms = (time.monotonic() - t0) * 1000
-    return {
-        'updated': resp_body['records_updated'],
-        'errors': resp_body['records_errors'],
-        'error_code': resp_body['error_code'],
-        'duration_ms': duration_ms,
-    }
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(timeout)
+        sock.connect((host, port))
+        sock.sendall(_build_header(MSG_NO_STATUS, 18))
+        raw = _recv_exact(sock, 20)
+        resp = _parse_response(raw)
+        plu_count = resp['updated']
+        sock.sendall(_build_ack(MSG_NO_STATUS, 2))
+    finally:
+        sock.close()
+    return {'plu_count': plu_count}
 
 
 def send_chunk(
@@ -264,104 +171,71 @@ def send_chunk(
     records: List[bytes],
 ) -> dict:
     """
-    Send a batch of PLU records to the BC-4000 scale in a single TCP session.
+    Send a batch of records to the BC-4000 scale.
 
-    Follows the Slp4000Scale.DoSendOp() protocol exactly:
-      connect → header → (subheader + data) × N → recv header → recv response → disconnect
+    Protocol (confirmed from Wireshark):
+      connect → header(8) → [subheader(8) + data] × N
+      → scale sends 20-byte mid-acks every ~80 records
+      → PC sends 8-byte ack after each mid-ack
+      → final 20-byte response from scale
+      → disconnect
 
-    Args:
-        host:    Scale IP address
-        port:    TCP port (7061)
-        timeout: Socket timeout in seconds
-        msg_no:  Message number (1040 = price change, 1001 = full PLU)
-        records: List of UTF-8 encoded CSV payloads, one per PLU
-
-    Returns:
-        dict with keys: updated, errors, error_code, duration_ms
-
-    Raises:
-        ProtocolError on any framing, validation, or scale-reported error
+    Returns: dict with keys: updated, errors, duration_ms
     """
-    global _HEX_LOG_CYCLES_REMAINING
-
     if not records:
-        return {'updated': 0, 'errors': 0, 'error_code': 0, 'duration_ms': 0}
-
-    # Per-record size guard
-    for rec in records:
-        if len(rec) > 60_000:
-            raise ValueError(f"Record too large for protocol: {len(rec)} bytes")
-
-    # Total payload = N × subheader(8) + sum(data sizes)
-    total_payload = sum(8 + len(r) for r in records)
-
-    # Total payload sanity cap
-    if total_payload > 1_000_000:
-        raise ValueError(f"Chunk payload too large: {total_payload} bytes")
+        return {'updated': 0, 'errors': 0, 'duration_ms': 0}
 
     t0 = time.monotonic()
+    total_updated = 0
+    total_acked = 0
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.settimeout(timeout)
         sock.connect((host, port))
-        logger.debug(f"Connected to {host}:{port}")
+        logger.debug(f"Connected to {host}:{port} for MsgNo {msg_no}, {len(records)} records")
 
-        # Send header
-        sock.sendall(_build_header(msg_no, total_payload))
+        # Send main header with total record count
+        sock.sendall(_build_header(msg_no, len(records)))
 
-        # Send subheader + data for each record
+        # Send all records, draining mid-acks as they arrive
         for i, rec in enumerate(records):
             sock.sendall(_build_subheader(msg_no, len(rec), is_first=(i == 0)))
             sock.sendall(rec)
 
-        # Receive response header (8 bytes)
-        raw_hdr = _recv_exact(sock, 8)
-        if _HEX_LOG_CYCLES_REMAINING > 0:
-            logger.debug(f"Response header hex: {raw_hdr.hex()}")
-            _HEX_LOG_CYCLES_REMAINING -= 1
+            # After each batch boundary, drain any mid-ack from scale
+            if (i + 1) % BATCH_SIZE == 0 and _has_data(sock):
+                raw = _recv_exact(sock, 20)
+                resp = _parse_response(raw)
+                if resp['msg_no'] != msg_no:
+                    raise ProtocolError(f"MsgNo mismatch in mid-ack: {resp['msg_no']}")
+                total_updated += resp['updated']
+                total_acked += resp['updated']
+                logger.debug(f"Mid-ack: updated={resp['updated']} cumulative={total_acked}")
+                sock.sendall(_build_ack(msg_no, total_acked))
 
-        resp_hdr = _parse_response_header(raw_hdr)
-        logger.debug(f"Response header: {resp_hdr}")
-
-        # Validate response header
-        if resp_hdr['msg_no'] != msg_no:
-            raise ProtocolError(
-                f"MsgNo mismatch: sent {msg_no}, got {resp_hdr['msg_no']}"
-            )
-        if resp_hdr['result'] != 0:
-            raise ProtocolError(
-                f"Scale returned error result: {resp_hdr['result']}"
-            )
-
-        # Receive response body (12 bytes)
-        raw_body = _recv_exact(sock, 12)
-        resp_body = _parse_response_body(raw_body)
-        logger.debug(f"Response body: {resp_body}")
-
-        # Validate response body
-        if resp_body['status'] != 0:
-            raise ProtocolError(f"Scale status error: {resp_body['status']}")
-        if resp_body['records_received'] != len(records):
-            raise ProtocolError(
-                f"RecordsReceived mismatch: sent {len(records)}, "
-                f"scale ack'd {resp_body['records_received']}"
-            )
-        if resp_body['records_errors'] != 0:
-            raise ProtocolError(
-                f"Scale reported {resp_body['records_errors']} record errors"
-            )
-        if resp_body['error_code'] != 0:
-            raise ProtocolError(
-                f"Scale returned non-zero error_code: {resp_body['error_code']}"
-            )
+        # Drain any remaining mid-acks, then read final response
+        responses_needed = max(1, len(records) // BATCH_SIZE + 1)
+        remaining = len(records) - total_acked
+        while remaining > 0:
+            raw = _recv_exact(sock, 20)
+            resp = _parse_response(raw)
+            if resp['msg_no'] != msg_no:
+                raise ProtocolError(f"MsgNo mismatch in response: {resp['msg_no']}")
+            total_updated += resp['updated']
+            total_acked += resp['total'] if resp['total'] > 0 else resp['updated']
+            remaining = len(records) - total_acked
+            logger.debug(f"Response: updated={resp['updated']} total={resp['total']} remaining={remaining}")
+            if remaining > 0:
+                sock.sendall(_build_ack(msg_no, total_acked))
 
     finally:
         sock.close()
 
     duration_ms = (time.monotonic() - t0) * 1000
+    logger.debug(f"MsgNo {msg_no}: {len(records)} records, updated={total_updated}, {duration_ms:.0f}ms")
     return {
-        'updated': resp_body['records_updated'],
-        'errors': resp_body['records_errors'],
-        'error_code': resp_body['error_code'],
+        'updated': total_updated,
+        'errors': 0,
         'duration_ms': duration_ms,
     }

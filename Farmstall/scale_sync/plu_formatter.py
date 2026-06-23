@@ -17,9 +17,10 @@ from typing import Optional
 
 logger = logging.getLogger('plu_formatter')
 
-MSG_NO_FULL_PLU    = 1001
-MSG_NO_DELETE_PLU  = 2023  # payload: "{plu_no}," — captured from SLP-V traffic
-MSG_NO_PRICE_CHANGE = 1040
+MSG_NO_FULL_PLU    = 1001  # confirmed from Wireshark 2026-06-23
+MSG_NO_DELETE_PLU  = 26    # MsgNo 0026 status/delete session
+MSG_NO_KEYBOARD    = 1024  # keyboard preset records
+MSG_NO_ADVERT      = 1029  # advertisement message records
 
 MAX_PLU_NO   = 99_999
 MAX_NAME_LEN = 20
@@ -116,7 +117,7 @@ def format_prohibit_plu(plu_no: int) -> bytes:
     """Format a PLU as prohibited — price 0, description REMOVED, prohibit flag.
     Used for orphan removal (safer than zero-out or MsgNo 2023 delete).
     """
-    desc = '\x0d\x0aREMOVED\x0d\x01'
+    desc = '\x0d\x0dREMOVED\x0d\x0d'
     f = [''] * 87
     for idx in [2,3,5,7,10,11,12,17,18,23,24,28,29,30,31,35,42,46,47,48,
                 50,53,54,57,58,59,60,66,71,73,75,76,78,85,86]:
@@ -154,7 +155,7 @@ def format_full_plu(product: dict) -> bytes:
     price      = price_cents(product)
     name       = (product.get('name') or '')[:MAX_NAME_LEN].upper().replace('"', '""')
     unit_line  = 'PER KG' if product.get('sold_by_weight') else 'EACH'
-    desc       = f'\x0d\x0a{name}\x0d\x01{unit_line}'
+    desc       = f'\x0d\x0d{name}\x0d\x0d{unit_line}'
     price_s    = str(price)
 
     # Confirmed field mappings (empirical — field_mapper.py + SLP-V DB readback):
@@ -175,9 +176,9 @@ def format_full_plu(product: dict) -> bytes:
     msg1_text  = (product.get('scale_msg1') or '').strip()[:20]
     msg2_text  = (product.get('scale_msg2') or '').strip()[:20]
     if msg1_text:
-        desc += f'\x0d\x01{msg1_text}'
+        desc += f'\x0d\x0d{msg1_text}'
     if msg2_text:
-        desc += f'\x0d\x01{msg2_text}'
+        desc += f'\x0d\x0d{msg2_text}'
 
     # 87-field layout captured from SLP-V network traffic (ground truth).
     # Empty string '' = reserved/unused field (not '0').
